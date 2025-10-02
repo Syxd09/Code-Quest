@@ -153,8 +153,11 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
             <RadioGroup value={answer} onValueChange={setAnswer} disabled={submitted}>
               {question.options?.map((option: string, index: number) => (
                 <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option} id={`option-${index}`} />
-                  <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
+                  <RadioGroupItem value={option} id={`option-${index}`} disabled={submitted} />
+                  <Label 
+                    htmlFor={`option-${index}`} 
+                    className={`flex-1 ${submitted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  >
                     {option}
                   </Label>
                 </div>

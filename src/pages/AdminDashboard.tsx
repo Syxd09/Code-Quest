@@ -101,9 +101,16 @@ const AdminDashboard = () => {
 
   const updateGameStatus = async (status: "waiting" | "started" | "paused" | "ended") => {
     try {
+      const updates: any = { status, updated_at: new Date().toISOString() };
+      
+      // When starting, set the first question if not already set
+      if (status === "started" && !game?.current_question_id && questions.length > 0) {
+        updates.current_question_id = questions[0].id;
+      }
+
       const { error } = await supabase
         .from("games")
-        .update({ status, updated_at: new Date().toISOString() })
+        .update(updates)
         .eq("id", gameId);
 
       if (error) throw error;

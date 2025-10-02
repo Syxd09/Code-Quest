@@ -7,6 +7,7 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedScore } from "@/components/AnimatedScore";
+import { ScoreSparkline } from "@/components/ScoreSparkline";
 
 const PlayQuiz = () => {
   const { gameId } = useParams();
@@ -16,6 +17,7 @@ const PlayQuiz = () => {
   const [participant, setParticipant] = useState<any>(null);
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [previousScore, setPreviousScore] = useState(0);
 
   useEffect(() => {
     if (!gameId) return;
@@ -47,6 +49,7 @@ const PlayQuiz = () => {
           .single();
 
         if (participantError) throw participantError;
+        setPreviousScore(participant?.score || 0);
         setParticipant(participantData);
 
         if (gameData.current_question_id) {
@@ -54,11 +57,15 @@ const PlayQuiz = () => {
             .from("questions")
             .select("*")
             .eq("id", gameData.current_question_id)
-            .single();
+            .maybeSingle();
 
-          if (!questionError) {
+          if (!questionError && questionData) {
             setCurrentQuestion(questionData);
+          } else {
+            setCurrentQuestion(null);
           }
+        } else {
+          setCurrentQuestion(null);
         }
 
         const { data: participantsData } = await supabase
@@ -132,8 +139,9 @@ const PlayQuiz = () => {
             <p className="text-white/80 mt-1">Hello, {participant.name}!</p>
           </div>
           <div className="flex items-center gap-4">
-            <Badge variant="outline" className="text-white border-white/30">
+            <Badge variant="outline" className="text-white border-white/30 relative">
               Score: <AnimatedScore score={participant.score} />
+              <ScoreSparkline score={participant.score} previousScore={previousScore} />
             </Badge>
             <Badge
               variant={
