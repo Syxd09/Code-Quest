@@ -261,6 +261,15 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      find_game_by_join_code: {
+        Args: { p_join_code: string }
+        Returns: {
+          created_at: string
+          id: string
+          status: Database["public"]["Enums"]["game_status"]
+          title: string
+        }[]
+      }
       generate_join_code: {
         Args: Record<PropertyKey, never>
         Returns: string

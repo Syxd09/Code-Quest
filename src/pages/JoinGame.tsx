@@ -22,14 +22,19 @@ const JoinGame = () => {
       if (!joinCode) return;
 
       try {
+        // Use secure function to lookup game without exposing admin_id
         const { data, error } = await supabase
-          .from("games")
-          .select("*")
-          .eq("join_code", joinCode.toUpperCase())
-          .single();
+          .rpc('find_game_by_join_code', {
+            p_join_code: joinCode.toUpperCase()
+          });
 
         if (error) throw error;
-        setGame(data);
+        
+        if (!data || data.length === 0) {
+          throw new Error("Game not found");
+        }
+        
+        setGame(data[0]);
       } catch (error: any) {
         toast.error("Game not found");
         navigate("/");
