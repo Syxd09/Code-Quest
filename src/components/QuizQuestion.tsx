@@ -58,53 +58,34 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const handleCheatDetected = async (reason: string) => {
     if (submitted || eliminated) return;
 
-    const newCheatCount = cheatCount + 1;
-    setCheatCount(newCheatCount);
+    try {
+      const { data, error } = await supabase.rpc('handle_cheat_detection', {
+        p_participant_id: participantId,
+        p_game_id: gameId,
+        p_reason: reason
+      });
 
-    // Log the cheat
-    await supabase.from("cheat_logs").insert({
-      game_id: gameId,
-      participant_id: participantId,
-      reason
-    });
+      if (error) throw error;
 
-    // Get current participant score
-    const { data: participant } = await supabase
-      .from("participants")
-      .select("score")
-      .eq("id", participantId)
-      .single();
-
-    if (participant) {
-      const newScore = Math.max(0, participant.score - 50);
+      const result = data as { success?: boolean; cheat_count: number; score: number; status: string; error?: string };
       
-      if (newCheatCount >= 3) {
-        // Eliminate the participant
-        await supabase
-          .from("participants")
-          .update({ 
-            cheat_count: newCheatCount,
-            score: newScore,
-            status: "eliminated"
-          })
-          .eq("id", participantId);
-        
+      if (result.error) {
+        toast.error(result.error);
+        return;
+      }
+
+      setCheatCount(result.cheat_count);
+
+      if (result.status === 'eliminated') {
         setEliminated(true);
         setWarningMessage("You have been ELIMINATED from the game due to multiple cheat attempts!");
         setShowWarning(true);
       } else {
-        // Deduct points and increment cheat count
-        await supabase
-          .from("participants")
-          .update({ 
-            cheat_count: newCheatCount,
-            score: newScore
-          })
-          .eq("id", participantId);
-        
-        setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}\n\n-50 points penalty!\n\nWarning ${newCheatCount}/3: One more strike and you'll be eliminated!`);
+        setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}\n\n-50 points penalty!\n\nWarning ${result.cheat_count}/3: One more strike and you'll be eliminated!`);
         setShowWarning(true);
       }
+    } catch (error: any) {
+      console.error('Cheat detection error:', error);
     }
   };
 
@@ -248,30 +229,29 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         pointsAwarded = Math.max(0, pointsAwarded - (question.hint_penalty || 10));
       }
 
-      const { error } = await supabase.from("responses").insert({
-        game_id: gameId,
-        question_id: question.id,
-        participant_id: participantId,
-        answer: finalAnswer,
-        correct,
-        time_taken: timeTaken,
-        points_awarded: pointsAwarded,
-        idempotency_key: `${participantId}-${question.id}-${Date.now()}`,
+      const { data, error } = await supabase.rpc('submit_response', {
+        p_game_id: gameId,
+        p_question_id: question.id,
+        p_participant_id: participantId,
+        p_answer: finalAnswer,
+        p_correct: correct,
+        p_time_taken: timeTaken,
+        p_points_awarded: pointsAwarded,
+        p_idempotency_key: `${participantId}-${question.id}-${Date.now()}`,
       });
 
       if (error) throw error;
 
-      const { data: participant } = await supabase
-        .from("participants")
-        .select("score")
-        .eq("id", participantId)
-        .single();
-
-      if (participant) {
-        await supabase
-          .from("participants")
-          .update({ score: participant.score + pointsAwarded })
-          .eq("id", participantId);
+      const result = data as { success?: boolean; points_awarded?: number; error?: string };
+      
+      if (result.error) {
+        if (result.error === 'Response already submitted') {
+          // Silently ignore duplicate submissions
+          setSubmitted(true);
+          setWasCorrect(correct);
+          return;
+        }
+        throw new Error(result.error);
       }
 
       setSubmitted(true);
@@ -280,14 +260,12 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       if (!autoSubmit) {
         toast.success(
           correct
-            ? `Correct! +${pointsAwarded} points`
+            ? `Correct! +${result.points_awarded} points`
             : "Incorrect. Better luck next time!"
         );
       }
     } catch (error: any) {
-      if (!error.message.includes("duplicate key")) {
-        toast.error(error.message);
-      }
+      toast.error(error.message);
     } finally {
       setSubmitting(false);
     }

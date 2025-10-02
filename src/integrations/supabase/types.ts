@@ -265,6 +265,23 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: string
       }
+      handle_cheat_detection: {
+        Args: { p_game_id: string; p_participant_id: string; p_reason: string }
+        Returns: Json
+      }
+      submit_response: {
+        Args: {
+          p_answer: Json
+          p_correct: boolean
+          p_game_id: string
+          p_idempotency_key: string
+          p_participant_id: string
+          p_points_awarded: number
+          p_question_id: string
+          p_time_taken: number
+        }
+        Returns: Json
+      }
     }
     Enums: {
       game_status: "waiting" | "started" | "paused" | "ended"
