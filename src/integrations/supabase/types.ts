@@ -91,7 +91,6 @@ export type Database = {
       }
       participants: {
         Row: {
-          admin_id: string | null
           cheat_count: number | null
           fingerprint: string | null
           game_id: string
@@ -104,7 +103,6 @@ export type Database = {
           user_id: string
         }
         Insert: {
-          admin_id?: string | null
           cheat_count?: number | null
           fingerprint?: string | null
           game_id: string
@@ -117,7 +115,6 @@ export type Database = {
           user_id: string
         }
         Update: {
-          admin_id?: string | null
           cheat_count?: number | null
           fingerprint?: string | null
           game_id?: string
@@ -280,14 +277,6 @@ export type Database = {
       handle_cheat_detection: {
         Args: { p_game_id: string; p_participant_id: string; p_reason: string }
         Returns: Json
-      }
-      is_game_admin: {
-        Args: { p_game_id: string; p_user_id: string }
-        Returns: boolean
-      }
-      is_game_participant: {
-        Args: { p_game_id: string; p_user_id: string }
-        Returns: boolean
       }
       submit_response: {
         Args: {
