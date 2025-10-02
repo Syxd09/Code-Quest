@@ -278,6 +278,14 @@ export type Database = {
         Args: { p_game_id: string; p_participant_id: string; p_reason: string }
         Returns: Json
       }
+      is_game_admin: {
+        Args: { p_game_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      is_game_participant: {
+        Args: { p_game_id: string; p_user_id: string }
+        Returns: boolean
+      }
       submit_response: {
         Args: {
           p_answer: Json
