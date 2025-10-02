@@ -91,6 +91,7 @@ export type Database = {
       }
       participants: {
         Row: {
+          admin_id: string | null
           cheat_count: number | null
           fingerprint: string | null
           game_id: string
@@ -103,6 +104,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          admin_id?: string | null
           cheat_count?: number | null
           fingerprint?: string | null
           game_id: string
@@ -115,6 +117,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          admin_id?: string | null
           cheat_count?: number | null
           fingerprint?: string | null
           game_id?: string
