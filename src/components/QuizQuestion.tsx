@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { motion } from "framer-motion";
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { Clock } from "lucide-react";
+import { Clock, Lightbulb } from "lucide-react";
 
 interface QuizQuestionProps {
   question: any;
@@ -26,8 +26,44 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const [submitting, setSubmitting] = useState(false);
   const [showReveal, setShowReveal] = useState(false);
   const [wasCorrect, setWasCorrect] = useState(false);
+  const [showHint, setShowHint] = useState(false);
+  const [hintUsed, setHintUsed] = useState(false);
+  const tabSwitchCount = useRef(0);
+
+  // Anti-cheat: Tab visibility detection
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden && !submitted) {
+        tabSwitchCount.current += 1;
+        if (tabSwitchCount.current >= 3) {
+          supabase.from("cheat_logs").insert({
+            game_id: gameId,
+            participant_id: participantId,
+            reason: "Multiple tab switches detected"
+          });
+          toast.error("Warning: Tab switching detected!");
+        }
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [submitted, gameId, participantId]);
+
+  // Reset state when question changes
+  useEffect(() => {
+    setTimeLeft(question.time_limit);
+    setAnswer(null);
+    setSelectedOptions([]);
+    setSubmitted(false);
+    setShowHint(false);
+    setHintUsed(false);
+    setShowReveal(false);
+    tabSwitchCount.current = 0;
+  }, [question.id, question.time_limit]);
 
   useEffect(() => {
+    if (submitted) return;
+    
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -70,7 +106,12 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       }
 
       const timeFactor = Math.max(0.1, timeLeft / question.time_limit);
-      const pointsAwarded = correct ? Math.round(question.points * timeFactor) : 0;
+      let pointsAwarded = correct ? Math.round(question.points * timeFactor) : 0;
+      
+      // Deduct hint penalty if hint was used
+      if (hintUsed && correct) {
+        pointsAwarded = Math.max(0, pointsAwarded - (question.hint_penalty || 10));
+      }
 
       const { error } = await supabase.from("responses").insert({
         game_id: gameId,
@@ -120,10 +161,16 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   useEffect(() => {
     if (revealSettings?.reveal_question_id === question.id && submitted) {
       setShowReveal(true);
-      const timer = setTimeout(() => setShowReveal(false), 10000);
+      const timer = setTimeout(() => setShowReveal(false), 8000);
       return () => clearTimeout(timer);
     }
   }, [revealSettings, question.id, submitted]);
+
+  const handleHintClick = () => {
+    setShowHint(true);
+    setHintUsed(true);
+    toast.info(`Hint revealed! -${question.hint_penalty || 10} points penalty`);
+  };
 
   const progress = (timeLeft / question.time_limit) * 100;
 
@@ -147,6 +194,30 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
           </div>
           <Progress value={progress} className="mb-4" />
           <CardTitle className="text-xl">{question.text}</CardTitle>
+          {question.hint && !showHint && !submitted && (
+            <Button
+              onClick={handleHintClick}
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              disabled={hintUsed}
+            >
+              <Lightbulb className="w-4 h-4 mr-2" />
+              Get Hint (-{question.hint_penalty || 10} points)
+            </Button>
+          )}
+          <AnimatePresence>
+            {showHint && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                className="bg-blue-500/10 border border-blue-500 rounded-lg p-3 text-blue-700 dark:text-blue-300"
+              >
+                💡 {question.hint}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </CardHeader>
         <CardContent className="space-y-4">
           {question.type === "mcq" && (
@@ -216,19 +287,49 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
             </motion.div>
           )}
 
-          {showReveal && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`p-4 rounded-lg text-center font-bold text-lg ${
-                wasCorrect
-                  ? "bg-green-500/20 text-green-600 border-2 border-green-500"
-                  : "bg-red-500/20 text-red-600 border-2 border-red-500"
-              }`}
-            >
-              {wasCorrect ? "✓ Correct!" : "✗ Incorrect"}
-            </motion.div>
-          )}
+          <AnimatePresence>
+            {showReveal && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.5, y: 50 }}
+                animate={{ 
+                  opacity: 1, 
+                  scale: 1, 
+                  y: 0,
+                  transition: {
+                    type: "spring",
+                    stiffness: 260,
+                    damping: 20
+                  }
+                }}
+                exit={{ opacity: 0, scale: 0.5, y: -50 }}
+                className={`p-6 rounded-xl text-center font-bold text-2xl shadow-lg ${
+                  wasCorrect
+                    ? "bg-gradient-to-r from-green-500/30 to-emerald-500/30 text-green-700 dark:text-green-300 border-2 border-green-500"
+                    : "bg-gradient-to-r from-red-500/30 to-rose-500/30 text-red-700 dark:text-red-300 border-2 border-red-500"
+                }`}
+              >
+                <motion.div
+                  animate={{
+                    scale: [1, 1.2, 1],
+                    rotate: wasCorrect ? [0, 10, -10, 0] : [0, -10, 10, 0]
+                  }}
+                  transition={{ duration: 0.5 }}
+                >
+                  {wasCorrect ? "🎉 Correct!" : "💔 Incorrect"}
+                </motion.div>
+                {wasCorrect && (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ delay: 0.3 }}
+                    className="text-sm mt-2 font-normal"
+                  >
+                    Great job! Keep it up!
+                  </motion.div>
+                )}
+              </motion.div>
+            )}
+          </AnimatePresence>
         </CardContent>
       </Card>
     </motion.div>

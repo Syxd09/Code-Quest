@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { QuizQuestion } from "@/components/QuizQuestion";
 import { Leaderboard } from "@/components/Leaderboard";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedScore } from "@/components/AnimatedScore";
 import { ScoreSparkline } from "@/components/ScoreSparkline";
+import { motion } from "framer-motion";
 
 const PlayQuiz = () => {
   const { gameId } = useParams();
@@ -178,15 +179,35 @@ const PlayQuiz = () => {
         )}
 
         {game.status === "ended" && (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <h2 className="text-2xl font-bold mb-4">Quiz Ended</h2>
-              <p className="text-muted-foreground mb-6">
-                Thanks for participating! Check out the final leaderboard below.
-              </p>
-              <Leaderboard participants={participants} highlightId={participant.id} />
-            </CardContent>
-          </Card>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5 }}
+          >
+            <Card className="shadow-2xl border-2">
+              <CardHeader className="text-center bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+                <motion.div
+                  initial={{ y: -30, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  transition={{ delay: 0.2 }}
+                >
+                  <CardTitle className="text-4xl mb-2">🏆 Game Over! 🏆</CardTitle>
+                  <CardDescription className="text-lg">
+                    Thanks for playing! Here are the final results:
+                  </CardDescription>
+                </motion.div>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.4 }}
+                >
+                  <Leaderboard participants={participants} highlightId={participant.id} />
+                </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
         )}
 
         {(game.status === "paused" || !currentQuestion) && game.status !== "ended" && game.status !== "waiting" && (
@@ -200,9 +221,11 @@ const PlayQuiz = () => {
           </Card>
         )}
 
-        <div className="mt-8">
-          <Leaderboard participants={participants} highlightId={participant.id} />
-        </div>
+        {game.status !== "ended" && (
+          <div className="mt-8">
+            <Leaderboard participants={participants} highlightId={participant.id} />
+          </div>
+        )}
       </div>
     </div>
   );
