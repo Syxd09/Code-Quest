@@ -6,6 +6,7 @@ import { QuizQuestion } from "@/components/QuizQuestion";
 import { Leaderboard } from "@/components/Leaderboard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { AnimatedScore } from "@/components/AnimatedScore";
 
 const PlayQuiz = () => {
   const { gameId } = useParams();
@@ -132,7 +133,7 @@ const PlayQuiz = () => {
           </div>
           <div className="flex items-center gap-4">
             <Badge variant="outline" className="text-white border-white/30">
-              Score: {participant.score}
+              Score: <AnimatedScore score={participant.score} />
             </Badge>
             <Badge
               variant={
@@ -164,6 +165,7 @@ const PlayQuiz = () => {
             question={currentQuestion}
             gameId={gameId!}
             participantId={participant.id}
+            revealSettings={game.settings}
           />
         )}
 

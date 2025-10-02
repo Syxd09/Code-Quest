@@ -15,14 +15,17 @@ interface QuizQuestionProps {
   question: any;
   gameId: string;
   participantId: string;
+  revealSettings?: any;
 }
 
-export const QuizQuestion = ({ question, gameId, participantId }: QuizQuestionProps) => {
+export const QuizQuestion = ({ question, gameId, participantId, revealSettings }: QuizQuestionProps) => {
   const [timeLeft, setTimeLeft] = useState(question.time_limit);
   const [answer, setAnswer] = useState<any>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [showReveal, setShowReveal] = useState(false);
+  const [wasCorrect, setWasCorrect] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -96,6 +99,7 @@ export const QuizQuestion = ({ question, gameId, participantId }: QuizQuestionPr
       }
 
       setSubmitted(true);
+      setWasCorrect(correct);
 
       if (!autoSubmit) {
         toast.success(
@@ -112,6 +116,14 @@ export const QuizQuestion = ({ question, gameId, participantId }: QuizQuestionPr
       setSubmitting(false);
     }
   };
+
+  useEffect(() => {
+    if (revealSettings?.reveal_question_id === question.id && submitted) {
+      setShowReveal(true);
+      const timer = setTimeout(() => setShowReveal(false), 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [revealSettings, question.id, submitted]);
 
   const progress = (timeLeft / question.time_limit) * 100;
 
@@ -191,13 +203,27 @@ export const QuizQuestion = ({ question, gameId, participantId }: QuizQuestionPr
             {submitted ? "Submitted" : submitting ? "Submitting..." : "Submit Answer"}
           </Button>
 
-          {submitted && (
+          {submitted && !showReveal && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               className="text-center text-muted-foreground"
             >
               Waiting for admin to reveal answer...
+            </motion.div>
+          )}
+
+          {showReveal && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className={`p-4 rounded-lg text-center font-bold text-lg ${
+                wasCorrect
+                  ? "bg-green-500/20 text-green-600 border-2 border-green-500"
+                  : "bg-red-500/20 text-red-600 border-2 border-red-500"
+              }`}
+            >
+              {wasCorrect ? "✓ Correct!" : "✗ Incorrect"}
             </motion.div>
           )}
         </CardContent>

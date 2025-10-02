@@ -1,6 +1,7 @@
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Medal, Award } from "lucide-react";
+import { AnimatedScore } from "./AnimatedScore";
 
 interface LeaderboardProps {
   participants: any[];
@@ -65,7 +66,7 @@ export const Leaderboard = ({ participants, highlightId }: LeaderboardProps) => 
                 <div>
                   <div className="font-medium">{participant.name}</div>
                   <div className="text-sm text-muted-foreground">
-                    {participant.score} points
+                    <AnimatedScore score={participant.score} /> points
                   </div>
                 </div>
               </div>

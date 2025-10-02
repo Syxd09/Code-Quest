@@ -1,16 +1,20 @@
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Edit, Trash } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import { QuestionForm } from "./QuestionForm";
 
 interface QuestionListProps {
   questions: any[];
   gameId: string;
+  orderIndex: number;
 }
 
-export const QuestionList = ({ questions, gameId }: QuestionListProps) => {
+export const QuestionList = ({ questions, gameId, orderIndex }: QuestionListProps) => {
+  const [editingQuestion, setEditingQuestion] = useState<any>(null);
   const deleteQuestion = async (id: string) => {
     if (!confirm("Are you sure you want to delete this question?")) return;
 
@@ -34,6 +38,17 @@ export const QuestionList = ({ questions, gameId }: QuestionListProps) => {
   }
 
   return (
+    <>
+      {editingQuestion && (
+        <QuestionForm
+          open={!!editingQuestion}
+          onClose={() => setEditingQuestion(null)}
+          gameId={gameId}
+          orderIndex={orderIndex}
+          question={editingQuestion}
+        />
+      )}
+
     <div className="space-y-4">
       {questions.map((question, index) => (
         <Card key={question.id}>
@@ -49,7 +64,11 @@ export const QuestionList = ({ questions, gameId }: QuestionListProps) => {
                 <CardTitle className="text-lg">{question.text}</CardTitle>
               </div>
               <div className="flex gap-2">
-                <Button variant="ghost" size="icon">
+                <Button 
+                  variant="ghost" 
+                  size="icon"
+                  onClick={() => setEditingQuestion(question)}
+                >
                   <Edit className="w-4 h-4" />
                 </Button>
                 <Button
@@ -83,5 +102,6 @@ export const QuestionList = ({ questions, gameId }: QuestionListProps) => {
         </Card>
       ))}
     </div>
+    </>
   );
 };

@@ -114,7 +114,27 @@ const AdminDashboard = () => {
   };
 
   const revealAnswer = async () => {
-    toast.success("Answer revealed to participants");
+    try {
+      if (!game?.current_question_id) {
+        toast.error("No active question to reveal");
+        return;
+      }
+
+      await supabase
+        .from("games")
+        .update({ 
+          settings: { 
+            ...game.settings, 
+            reveal_question_id: game.current_question_id,
+            reveal_timestamp: Date.now()
+          } 
+        })
+        .eq("id", gameId);
+      
+      toast.success("Answer revealed to participants");
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
   const nextQuestion = async () => {
@@ -232,7 +252,7 @@ const AdminDashboard = () => {
                 Add Question
               </Button>
             </div>
-            <QuestionList questions={questions} gameId={gameId!} />
+            <QuestionList questions={questions} gameId={gameId!} orderIndex={questions.length} />
           </TabsContent>
 
           <TabsContent value="participants">
