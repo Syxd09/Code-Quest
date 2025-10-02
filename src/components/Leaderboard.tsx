@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Medal, Award } from "lucide-react";
+import { Trophy, Medal, Award, Ban } from "lucide-react";
 import { AnimatedScore } from "./AnimatedScore";
 
 interface LeaderboardProps {
@@ -47,31 +47,53 @@ export const Leaderboard = ({ participants, highlightId }: LeaderboardProps) => 
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {sortedParticipants.map((participant, index) => (
-            <motion.div
-              key={participant.id}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: index * 0.05 }}
-              className={`flex items-center justify-between p-3 rounded-lg border ${
-                participant.id === highlightId
-                  ? "bg-primary/10 border-primary"
-                  : "bg-card"
-              }`}
-            >
-              <div className="flex items-center gap-3">
-                <div className="w-8 text-center font-bold">
-                  {getRankIcon(index) || `#${index + 1}`}
-                </div>
-                <div>
-                  <div className="font-medium">{participant.name}</div>
-                  <div className="text-sm text-muted-foreground">
-                    <AnimatedScore score={participant.score} /> points
+          {sortedParticipants.map((participant, index) => {
+            const isEliminated = participant.status === "eliminated";
+            
+            return (
+              <motion.div
+                key={participant.id}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: index * 0.05 }}
+                className={`flex items-center justify-between p-3 rounded-lg border ${
+                  isEliminated
+                    ? "bg-destructive/10 border-destructive opacity-60"
+                    : participant.id === highlightId
+                    ? "bg-primary/10 border-primary"
+                    : "bg-card"
+                }`}
+              >
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-8 text-center font-bold">
+                    {isEliminated ? (
+                      <Ban className="w-5 h-5 text-destructive mx-auto" />
+                    ) : (
+                      getRankIcon(index) || `#${index + 1}`
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <div className={`font-medium flex items-center gap-2 ${isEliminated ? "line-through text-muted-foreground" : ""}`}>
+                      {participant.name}
+                      {isEliminated && (
+                        <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded">
+                          ELIMINATED
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-sm text-muted-foreground">
+                      <AnimatedScore score={participant.score} /> points
+                      {participant.cheat_count > 0 && !isEliminated && (
+                        <span className="ml-2 text-xs text-destructive">
+                          ({participant.cheat_count} cheats)
+                        </span>
+                      )}
+                    </div>
                   </div>
                 </div>
-              </div>
-            </motion.div>
-          ))}
+              </motion.div>
+            );
+          })}
         </div>
       </CardContent>
     </Card>
