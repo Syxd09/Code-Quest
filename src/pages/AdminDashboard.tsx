@@ -39,9 +39,14 @@ const AdminDashboard = () => {
           .from("games")
           .select("*")
           .eq("id", gameId)
-          .single();
+          .maybeSingle();
 
         if (gameError) throw gameError;
+        if (!gameData) {
+          toast.error("Game not found");
+          navigate("/");
+          return;
+        }
 
         if (gameData.admin_id !== user.id) {
           toast.error("Unauthorized");

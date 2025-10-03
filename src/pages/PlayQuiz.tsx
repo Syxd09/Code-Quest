@@ -33,23 +33,38 @@ const PlayQuiz = () => {
 
     const fetchData = async () => {
       try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          localStorage.setItem('redirectTo', window.location.pathname);
+          navigate('/auth');
+          return;
+        }
         const { data: gameData, error: gameError } = await supabase
           .from("games")
           .select("*")
           .eq("id", gameId)
-          .single();
+          .maybeSingle();
 
         if (gameError) throw gameError;
+        if (!gameData) {
+          toast.error("Game not found");
+          navigate(`/join/${gameId}`);
+          return;
+        }
         setGame(gameData);
 
         const { data: participantData, error: participantError } = await supabase
           .from("participants")
           .select("*")
           .eq("game_id", gameId)
-          .eq("user_id", userId)
-          .single();
+          .eq("user_id", user.id)
+          .maybeSingle();
 
         if (participantError) throw participantError;
+        if (!participantData) {
+          navigate(`/join/${gameId}`);
+          return;
+        }
         setPreviousScore(participant?.score || 0);
         setParticipant(participantData);
 

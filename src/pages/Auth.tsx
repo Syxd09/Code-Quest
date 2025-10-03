@@ -18,13 +18,25 @@ const Auth = () => {
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session) {
-        navigate("/");
+        const redirectTo = localStorage.getItem('redirectTo');
+        if (redirectTo) {
+          localStorage.removeItem('redirectTo');
+          navigate(redirectTo);
+        } else {
+          navigate("/");
+        }
       }
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session) {
-        navigate("/");
+        const redirectTo = localStorage.getItem('redirectTo');
+        if (redirectTo) {
+          localStorage.removeItem('redirectTo');
+          navigate(redirectTo);
+        } else {
+          navigate("/");
+        }
       }
     });
 

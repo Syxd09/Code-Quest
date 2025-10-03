@@ -46,6 +46,16 @@ const JoinGame = () => {
     fetchGame();
   }, [joinCode, navigate]);
 
+  useEffect(() => {
+    const pending = localStorage.getItem('join_intent');
+    if (pending) {
+      try {
+        const { name: savedName } = JSON.parse(pending);
+        if (savedName) setName(savedName);
+      } catch {}
+    }
+  }, []);
+
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -57,11 +67,20 @@ const JoinGame = () => {
     setJoining(true);
 
     try {
-      const userId = crypto.randomUUID();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        // Persist intent and redirect to auth, then back here
+        localStorage.setItem('join_intent', JSON.stringify({ name: name.trim(), joinCode }));
+        localStorage.setItem('redirectTo', window.location.pathname);
+        toast.message("Please sign in to join the quiz");
+        navigate('/auth');
+        return;
+      }
+
       const fingerprint = `${navigator.userAgent}-${Date.now()}`;
 
       const { error } = await supabase.from("participants").insert({
-        user_id: userId,
+        user_id: user.id,
         name: name.trim(),
         game_id: game.id,
         fingerprint,
@@ -71,8 +90,10 @@ const JoinGame = () => {
 
       localStorage.setItem(
         `quiz_session_${game.id}`,
-        JSON.stringify({ userId, name, fingerprint })
+        JSON.stringify({ userId: user.id, name, fingerprint })
       );
+      localStorage.removeItem('join_intent');
+      localStorage.removeItem('redirectTo');
 
       toast.success("Joined successfully!");
       navigate(`/play/${game.id}`);
@@ -118,7 +139,10 @@ const JoinGame = () => {
                   type="text"
                   placeholder="Enter your name..."
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) => {
+                    setName(e.target.value);
+                    localStorage.setItem('join_intent', JSON.stringify({ name: e.target.value, joinCode }));
+                  }}
                   autoFocus
                   required
                 />
