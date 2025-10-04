@@ -116,8 +116,19 @@ const JoinGame = () => {
     return null;
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
+    return (
+  <div className="min-h-screen flex">
+    {/* Left Side - Image (60%) */}
+    <div className="w-3/5 hidden md:block">
+      <img
+        src="/your-image-path.jpg" 
+        alt="Quiz Illustration"
+        className="w-full h-full object-cover"
+      />
+    </div>
+
+    {/* Right Side - Join Game (40%) */}
+    <div className="w-full md:w-2/5 flex items-center justify-center p-6 bg-gradient-hero">
       <motion.div
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
@@ -141,13 +152,20 @@ const JoinGame = () => {
                   value={name}
                   onChange={(e) => {
                     setName(e.target.value);
-                    localStorage.setItem('join_intent', JSON.stringify({ name: e.target.value, joinCode }));
+                    localStorage.setItem(
+                      "join_intent",
+                      JSON.stringify({ name: e.target.value, joinCode })
+                    );
                   }}
                   autoFocus
                   required
                 />
               </div>
-              <Button type="submit" className="w-full shadow-button" disabled={joining}>
+              <Button
+                type="submit"
+                className="w-full shadow-button"
+                disabled={joining}
+              >
                 {joining ? "Joining..." : "Join Quiz"}
               </Button>
             </form>
@@ -155,7 +173,9 @@ const JoinGame = () => {
         </Card>
       </motion.div>
     </div>
-  );
+  </div>
+);
+
 };
 
 export default JoinGame;
