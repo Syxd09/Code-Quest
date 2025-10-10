@@ -4,15 +4,23 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { QuizQuestion } from "@/components/QuizQuestion";
 import { Leaderboard } from "@/components/Leaderboard";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { AnimatedScore } from "@/components/AnimatedScore";
 import { ScoreSparkline } from "@/components/ScoreSparkline";
 import { motion } from "framer-motion";
+import { AlertTriangle } from "lucide-react";
 
 const PlayQuiz = () => {
   const { gameId } = useParams();
   const navigate = useNavigate();
+
   const [game, setGame] = useState<any>(null);
   const [currentQuestion, setCurrentQuestion] = useState<any>(null);
   const [participant, setParticipant] = useState<any>(null);
@@ -33,12 +41,16 @@ const PlayQuiz = () => {
 
     const fetchData = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
         if (!user) {
-          localStorage.setItem('redirectTo', window.location.pathname);
-          navigate('/auth');
+          localStorage.setItem("redirectTo", window.location.pathname);
+          navigate("/auth");
           return;
         }
+
         const { data: gameData, error: gameError } = await supabase
           .from("games")
           .select("*")
@@ -51,6 +63,7 @@ const PlayQuiz = () => {
           navigate(`/join/${gameId}`);
           return;
         }
+
         setGame(gameData);
 
         const { data: participantData, error: participantError } = await supabase
@@ -65,6 +78,7 @@ const PlayQuiz = () => {
           navigate(`/join/${gameId}`);
           return;
         }
+
         setPreviousScore(participant?.score || 0);
         setParticipant(participantData);
 
@@ -104,12 +118,22 @@ const PlayQuiz = () => {
       .channel(`game-${gameId}`)
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "games", filter: `id=eq.${gameId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "games",
+          filter: `id=eq.${gameId}`,
+        },
         () => fetchData()
       )
       .on(
         "postgres_changes",
-        { event: "*", schema: "public", table: "participants", filter: `game_id=eq.${gameId}` },
+        {
+          event: "*",
+          schema: "public",
+          table: "participants",
+          filter: `game_id=eq.${gameId}`,
+        },
         () => fetchData()
       )
       .subscribe();
@@ -133,15 +157,60 @@ const PlayQuiz = () => {
 
   if (participant.status === "eliminated") {
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center p-4">
-        <Card className="max-w-md">
-          <CardContent className="pt-6 text-center">
-            <h2 className="text-2xl font-bold text-destructive mb-4">Eliminated</h2>
-            <p className="text-muted-foreground">
-              You have been eliminated from the quiz due to multiple cheat attempts.
-            </p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-br from-red-950 via-black to-gray-900 flex items-center justify-center p-4">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: "easeOut" }}
+          className="w-full max-w-md"
+        >
+          <Card className="bg-black/50 border border-red-800/40 shadow-[0_0_30px_-10px_rgba(255,0,0,0.6)] backdrop-blur-md text-center rounded-2xl overflow-hidden">
+            <CardContent className="pt-8 pb-10 px-6">
+              <motion.div
+                initial={{ rotate: -20, opacity: 0 }}
+                animate={{ rotate: 0, opacity: 1 }}
+                transition={{ duration: 0.5 }}
+                className="flex justify-center mb-4"
+              >
+                <AlertTriangle className="w-16 h-16 text-red-500 animate-pulse drop-shadow-[0_0_10px_rgba(255,0,0,0.8)]" />
+              </motion.div>
+
+              <motion.h2
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="text-3xl font-extrabold text-red-500 mb-3 tracking-wide"
+              >
+                Eliminated
+              </motion.h2>
+
+              <motion.p
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="text-gray-300 text-sm leading-relaxed"
+              >
+                You have been{" "}
+                <span className="text-red-400 font-semibold">eliminated</span>{" "}
+                from the quiz due to multiple cheat attempts.
+              </motion.p>
+
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.8 }}
+                className="mt-8"
+              >
+                <button
+                  onClick={() => window.location.reload()}
+                  className="px-6 py-2 text-sm font-semibold rounded-full border border-red-600 text-red-400 hover:bg-red-600 hover:text-white transition-all duration-300 shadow-[0_0_10px_rgba(255,0,0,0.4)]"
+                >
+                  Try Again
+                </button>
+              </motion.div>
+            </CardContent>
+          </Card>
+        </motion.div>
       </div>
     );
   }
@@ -154,11 +223,16 @@ const PlayQuiz = () => {
             <h1 className="text-3xl font-bold text-white">{game.title}</h1>
             <p className="text-white/80 mt-1">Hello, {participant.name}!</p>
           </div>
+
           <div className="flex items-center gap-4">
             <Badge variant="outline" className="text-white border-white/30 relative">
               Score: <AnimatedScore score={participant.score} />
-              <ScoreSparkline score={participant.score} previousScore={previousScore} />
+              <ScoreSparkline
+                score={participant.score}
+                previousScore={previousScore}
+              />
             </Badge>
+
             <Badge
               variant={
                 game.status === "started"
@@ -212,33 +286,43 @@ const PlayQuiz = () => {
                   </CardDescription>
                 </motion.div>
               </CardHeader>
+
               <CardContent className="pt-6">
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4 }}
                 >
-                  <Leaderboard participants={participants} highlightId={participant.id} />
+                  <Leaderboard
+                    participants={participants}
+                    highlightId={participant.id}
+                  />
                 </motion.div>
               </CardContent>
             </Card>
           </motion.div>
         )}
 
-        {(game.status === "paused" || !currentQuestion) && game.status !== "ended" && game.status !== "waiting" && (
-          <Card>
-            <CardContent className="pt-6 text-center">
-              <h2 className="text-2xl font-bold mb-2">Please wait...</h2>
-              <p className="text-muted-foreground">
-                The admin will start the next question shortly.
-              </p>
-            </CardContent>
-          </Card>
-        )}
+        {(game.status === "paused" ||
+          !currentQuestion) &&
+          game.status !== "ended" &&
+          game.status !== "waiting" && (
+            <Card>
+              <CardContent className="pt-6 text-center">
+                <h2 className="text-2xl font-bold mb-2">Please wait...</h2>
+                <p className="text-muted-foreground">
+                  The admin will start the next question shortly.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
         {game.status !== "ended" && (
           <div className="mt-8">
-            <Leaderboard participants={participants} highlightId={participant.id} />
+            <Leaderboard
+              participants={participants}
+              highlightId={participant.id}
+            />
           </div>
         )}
       </div>
