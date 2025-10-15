@@ -472,9 +472,9 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
             {showReveal && (
               <motion.div
                 initial={{ opacity: 0, scale: 0.5, y: 50 }}
-                animate={{ 
-                  opacity: 1, 
-                  scale: 1, 
+                animate={{
+                  opacity: 1,
+                  scale: 1,
                   y: 0,
                   transition: {
                     type: "spring",
@@ -508,6 +508,14 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
                     Great job! Keep it up!
                   </motion.div>
                 )}
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ delay: 0.6 }}
+                  className="text-sm mt-4 font-normal text-muted-foreground"
+                >
+                  Correct Answer: {question.correct_answers?.join(", ") || question.keywords?.map((k: any) => k.text).join(", ")}
+                </motion.div>
               </motion.div>
             )}
           </AnimatePresence>
