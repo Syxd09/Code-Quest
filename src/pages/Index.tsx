@@ -72,7 +72,7 @@ const Index = () => {
    <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 bg-slate-800 p-4 md:p-6 rounded-lg w-full max-w-4xl">
    {/* Logo image */}
    <img
-     src="/DSBA-LOGO.png"
+     src="public/DSBA-logo.jpg"
      alt="Dayananda Sagar Business Academy Logo"
      className="w-24 h-24 md:w-32 md:h-32 object-contain"
      onError={() => console.log('DSBA-LOGO.png failed to load')}

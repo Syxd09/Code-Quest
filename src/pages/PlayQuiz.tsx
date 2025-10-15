@@ -102,7 +102,7 @@ const PlayQuiz = () => {
           setCurrentQuestion(null);
         }
 
-        const { data: participantsData } = await supabase
+        const { data: participantsData, error: participantsError } = await supabase
           .from("participants")
           .select("*")
           .eq("game_id", gameId)
