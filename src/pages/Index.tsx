@@ -61,30 +61,30 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero">
-  <div className="container mx-auto px-4 py-16">
-    {/* Hero Section */}
-    <motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6 }}
-  className="flex items-center justify-center mb-16 space-x-6"
->
-  <div className="flex flex-row items-center space-x-6 bg-slate-800 p-6 rounded-lg">
-  {/* Logo image */}
-  <img
-    src="public/DSBA-LOGO.png"
-    alt="Dayananda Sagar Business Academy Logo"
-    className="w-32 h-32 object-contain"
-  />
+   <div className="container mx-auto px-4 py-8 md:py-16">
+     {/* Hero Section */}
+     <motion.div
+   initial={{ opacity: 0, y: 20 }}
+   animate={{ opacity: 1, y: 0 }}
+   transition={{ duration: 0.6 }}
+   className="flex items-center justify-center mb-8 md:mb-16"
+ >
+   <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 bg-slate-800 p-4 md:p-6 rounded-lg w-full max-w-4xl">
+   {/* Logo image */}
+   <img
+     src="public/DSBA-LOGO.png"
+     alt="Dayananda Sagar Business Academy Logo"
+     className="w-24 h-24 md:w-32 md:h-32 object-contain"
+   />
 
-  {/* Academy name text */}
-  <div>
-    <span className="text-3xl md:text-5xl font-bold text-white">
-      Dayananda Sagar Business Academy
-    </span>
-  </div>
-  </div>
-</motion.div>
+   {/* Academy name text */}
+   <div className="text-center md:text-left">
+     <span className="text-2xl md:text-3xl lg:text-5xl font-bold text-white leading-tight">
+       Dayananda Sagar Business Academy
+     </span>
+   </div>
+   </div>
+ </motion.div>
 
 
      {/* Action Cards */}

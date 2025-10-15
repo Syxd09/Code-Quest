@@ -117,64 +117,65 @@ const JoinGame = () => {
   }
 
     return (
-  <div className="min-h-screen flex">
-    {/* Left Side - Image (60%) */}
-    <div className="w-3/5 hidden md:block">
-      <img
-        src="/your-image-path.jpg" 
-        alt="Quiz Illustration"
-        className="w-full h-full object-cover"
-      />
-    </div>
+   <div className="min-h-screen flex flex-col md:flex-row">
+     {/* Left Side - Image (60%) - Hidden on mobile */}
+     <div className="w-full md:w-3/5 hidden md:block">
+       <img
+         src="/your-image-path.jpg"
+         alt="Quiz Illustration"
+         className="w-full h-full object-cover"
+       />
+     </div>
 
-    {/* Right Side - Join Game (40%) */}
-    <div className="w-full md:w-2/5 flex items-center justify-center p-6 bg-gradient-hero">
-      <motion.div
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="w-full max-w-md"
-      >
-        <Card className="shadow-card">
-          <CardHeader className="text-center">
-            <UserCircle className="w-16 h-16 mx-auto mb-4 text-primary" />
-            <CardTitle className="text-2xl">{game.title}</CardTitle>
-            <CardDescription>Enter your name to join the quiz</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleJoin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Your Name</Label>
-                <Input
-                  id="name"
-                  type="text"
-                  placeholder="Enter your name..."
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value);
-                    localStorage.setItem(
-                      "join_intent",
-                      JSON.stringify({ name: e.target.value, joinCode })
-                    );
-                  }}
-                  autoFocus
-                  required
-                />
-              </div>
-              <Button
-                type="submit"
-                className="w-full shadow-button"
-                disabled={joining}
-              >
-                {joining ? "Joining..." : "Join Quiz"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </motion.div>
-    </div>
-  </div>
-);
+     {/* Right Side - Join Game (40%) */}
+     <div className="w-full md:w-2/5 flex items-center justify-center p-4 md:p-6 bg-gradient-hero min-h-screen md:min-h-0">
+       <motion.div
+         initial={{ opacity: 0, scale: 0.95 }}
+         animate={{ opacity: 1, scale: 1 }}
+         transition={{ duration: 0.5 }}
+         className="w-full max-w-md px-4"
+       >
+         <Card className="shadow-card">
+           <CardHeader className="text-center">
+             <UserCircle className="w-12 h-12 md:w-16 md:h-16 mx-auto mb-4 text-primary" />
+             <CardTitle className="text-xl md:text-2xl">{game.title}</CardTitle>
+             <CardDescription className="text-sm md:text-base">Enter your name to join the quiz</CardDescription>
+           </CardHeader>
+           <CardContent>
+             <form onSubmit={handleJoin} className="space-y-4">
+               <div className="space-y-2">
+                 <Label htmlFor="name" className="text-sm md:text-base">Your Name</Label>
+                 <Input
+                   id="name"
+                   type="text"
+                   placeholder="Enter your name..."
+                   value={name}
+                   onChange={(e) => {
+                     setName(e.target.value);
+                     localStorage.setItem(
+                       "join_intent",
+                       JSON.stringify({ name: e.target.value, joinCode })
+                     );
+                   }}
+                   autoFocus
+                   required
+                   className="text-base md:text-lg py-3"
+                 />
+               </div>
+               <Button
+                 type="submit"
+                 className="w-full shadow-button text-base md:text-lg py-3 min-h-[48px] touch-manipulation"
+                 disabled={joining}
+               >
+                 {joining ? "Joining..." : "Join Quiz"}
+               </Button>
+             </form>
+           </CardContent>
+         </Card>
+       </motion.div>
+     </div>
+   </div>
+ );
 
 };
 

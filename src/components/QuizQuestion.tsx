@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHea
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Clock, Lightbulb, AlertTriangle } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface QuizQuestionProps {
   question: any;
@@ -20,6 +21,7 @@ interface QuizQuestionProps {
 }
 
 export const QuizQuestion = ({ question, gameId, participantId, revealSettings }: QuizQuestionProps) => {
+  const isMobile = useIsMobile();
   const [timeLeft, setTimeLeft] = useState(question.time_limit);
   const [answer, setAnswer] = useState<any>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -36,7 +38,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const tabSwitchCount = useRef(0);
   const devToolsCheckInterval = useRef<NodeJS.Timeout>();
 
-  // Load initial cheat count
+  // Load initial cheat count with grace period for mobile joins
   useEffect(() => {
     const loadCheatCount = async () => {
       const { data } = await supabase
@@ -44,12 +46,18 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         .select("cheat_count, status")
         .eq("id", participantId)
         .single();
-      
+
       if (data) {
-        setCheatCount(data.cheat_count || 0);
-        if (data.status === "eliminated") {
-          setEliminated(true);
-        }
+        // Grace period of 3 seconds for initial joins, especially on mobile
+        const gracePeriod = 3000;
+        console.log(`Activating anti-cheat after ${gracePeriod}ms grace period for mobile-friendly experience`);
+
+        setTimeout(() => {
+          setCheatCount(data.cheat_count || 0);
+          if (data.status === "eliminated") {
+            setEliminated(true);
+          }
+        }, gracePeriod);
       }
     };
     loadCheatCount();
@@ -57,6 +65,8 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
   const handleCheatDetected = async (reason: string) => {
     if (submitted || eliminated) return;
+
+    console.log(`Cheat detected: ${reason}, isMobile: ${isMobile}`);
 
     try {
       const { data, error } = await supabase.rpc('handle_cheat_detection', {
@@ -68,7 +78,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       if (error) throw error;
 
       const result = data as { success?: boolean; cheat_count: number; score: number; status: string; error?: string };
-      
+
       if (result.error) {
         toast.error(result.error);
         return;
@@ -93,28 +103,36 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !submitted && !eliminated) {
-        handleCheatDetected("Tab switching detected");
+        console.log("Tab visibility change detected, isMobile:", isMobile);
+        if (!isMobile) {
+          handleCheatDetected("Tab switching detected");
+        } else {
+          console.log("Ignoring tab switch on mobile device");
+        }
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [submitted, eliminated, cheatCount]);
+  }, [submitted, eliminated, cheatCount, isMobile]);
 
   // Anti-cheat: Browser back button detection
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
-      if (!submitted && !eliminated) {
+      console.log("Browser back button detected, isMobile:", isMobile);
+      if (!submitted && !eliminated && !isMobile) {
         handleCheatDetected("Browser back button usage detected");
         window.history.pushState(null, "", window.location.href);
+      } else if (isMobile) {
+        console.log("Ignoring browser back button on mobile device");
       }
     };
-    
+
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", handlePopState);
-    
+
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [submitted, eliminated, cheatCount]);
+  }, [submitted, eliminated, cheatCount, isMobile]);
 
   // Anti-cheat: DevTools detection
   useEffect(() => {
@@ -122,50 +140,60 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       const threshold = 160;
       const widthThreshold = window.outerWidth - window.innerWidth > threshold;
       const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-      
+
       if (widthThreshold || heightThreshold) {
-        if (!submitted && !eliminated) {
+        console.log("DevTools detection triggered, isMobile:", isMobile);
+        if (!submitted && !eliminated && !isMobile) {
           handleCheatDetected("Developer tools opened");
+        } else if (isMobile) {
+          console.log("Ignoring DevTools detection on mobile device");
         }
       }
     };
 
     devToolsCheckInterval.current = setInterval(detectDevTools, 1000);
-    
+
     return () => {
       if (devToolsCheckInterval.current) {
         clearInterval(devToolsCheckInterval.current);
       }
     };
-  }, [submitted, eliminated, cheatCount]);
+  }, [submitted, eliminated, cheatCount, isMobile]);
 
   // Anti-cheat: Copy-paste detection
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      if (!submitted && !eliminated) {
+      console.log("Paste event detected, isMobile:", isMobile);
+      if (!submitted && !eliminated && !isMobile) {
         e.preventDefault();
         handleCheatDetected("Copy-paste attempt detected");
+      } else if (isMobile) {
+        console.log("Allowing paste on mobile device");
       }
     };
 
     const handleCopy = (e: ClipboardEvent) => {
-      if (!submitted && !eliminated) {
+      console.log("Copy event detected, isMobile:", isMobile);
+      if (!submitted && !eliminated && !isMobile) {
         e.preventDefault();
         handleCheatDetected("Copy attempt detected");
+      } else if (isMobile) {
+        console.log("Allowing copy on mobile device");
       }
     };
 
     document.addEventListener("paste", handlePaste);
     document.addEventListener("copy", handleCopy);
-    
+
     return () => {
       document.removeEventListener("paste", handlePaste);
       document.removeEventListener("copy", handleCopy);
     };
-  }, [submitted, eliminated, cheatCount]);
+  }, [submitted, eliminated, cheatCount, isMobile]);
 
   // Reset state when question changes
   useEffect(() => {
+    console.log("Question changed, resetting state. New question ID:", question.id);
     setTimeLeft(question.time_limit);
     setAnswer(null);
     setSelectedOptions([]);
@@ -207,13 +235,15 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       let correct = false;
 
       if (question.type === "mcq") {
-        finalAnswer = answer;
-        correct = question.correct_answers?.includes(answer);
-      } else if (question.type === "checkbox") {
-        finalAnswer = selectedOptions;
-        correct =
-          selectedOptions.length === question.correct_answers?.length &&
-          selectedOptions.every((opt) => question.correct_answers.includes(opt));
+        if (question.correct_answers?.length === 1) {
+          finalAnswer = answer;
+          correct = question.correct_answers?.includes(answer);
+        } else {
+          finalAnswer = selectedOptions;
+          correct =
+            selectedOptions.length === question.correct_answers?.length &&
+            selectedOptions.every((opt) => question.correct_answers.includes(opt));
+        }
       } else if (question.type === "short") {
         finalAnswer = answer;
         const keywords = question.keywords?.map((k: any) => k.text.toLowerCase()) || [];
@@ -329,17 +359,17 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       >
       <Card className="shadow-card">
         <CardHeader>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" />
-              <span className="text-2xl font-bold">{timeLeft}s</span>
+              <span className="text-xl md:text-2xl font-bold">{timeLeft}s</span>
             </div>
             <div className="text-sm text-muted-foreground">
               {question.points} points
             </div>
           </div>
           <Progress value={progress} className="mb-4" />
-          <CardTitle className="text-xl">{question.text}</CardTitle>
+          <CardTitle className="text-lg md:text-xl leading-relaxed">{question.text}</CardTitle>
           {question.hint && !showHint && !submitted && (
             <Button
               onClick={handleHintClick}
@@ -367,43 +397,46 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         </CardHeader>
         <CardContent className="space-y-4">
           {question.type === "mcq" && (
-            <RadioGroup value={answer} onValueChange={setAnswer} disabled={submitted}>
-              {question.options?.map((option: string, index: number) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <RadioGroupItem value={option} id={`option-${index}`} disabled={submitted} />
-                  <Label 
-                    htmlFor={`option-${index}`} 
-                    className={`flex-1 ${submitted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                  >
-                    {option}
-                  </Label>
+            <>
+              {question.correct_answers?.length === 1 ? (
+                <RadioGroup value={answer} onValueChange={setAnswer} disabled={submitted}>
+                  {question.options?.map((option: string, index: number) => (
+                    <div key={index} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <RadioGroupItem value={option} id={`option-${index}`} disabled={submitted} className="mt-1" />
+                      <Label
+                        htmlFor={`option-${index}`}
+                        className={`flex-1 text-sm md:text-base leading-relaxed ${submitted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                      >
+                        {option}
+                      </Label>
+                    </div>
+                  ))}
+                </RadioGroup>
+              ) : (
+                <div className="space-y-3">
+                  {question.options?.map((option: string, index: number) => (
+                    <div key={index} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
+                      <Checkbox
+                        id={`option-${index}`}
+                        checked={selectedOptions.includes(option)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setSelectedOptions([...selectedOptions, option]);
+                          } else {
+                            setSelectedOptions(selectedOptions.filter((o) => o !== option));
+                          }
+                        }}
+                        disabled={submitted}
+                        className="mt-1"
+                      />
+                      <Label htmlFor={`option-${index}`} className="flex-1 text-sm md:text-base leading-relaxed cursor-pointer">
+                        {option}
+                      </Label>
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </RadioGroup>
-          )}
-
-          {question.type === "checkbox" && (
-            <div className="space-y-2">
-              {question.options?.map((option: string, index: number) => (
-                <div key={index} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={`option-${index}`}
-                    checked={selectedOptions.includes(option)}
-                    onCheckedChange={(checked) => {
-                      if (checked) {
-                        setSelectedOptions([...selectedOptions, option]);
-                      } else {
-                        setSelectedOptions(selectedOptions.filter((o) => o !== option));
-                      }
-                    }}
-                    disabled={submitted}
-                  />
-                  <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
-                    {option}
-                  </Label>
-                </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
 
           {question.type === "short" && (
@@ -412,13 +445,15 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
               onChange={(e) => setAnswer(e.target.value)}
               placeholder="Type your answer..."
               disabled={submitted}
+              className="text-base md:text-lg py-3"
             />
           )}
 
           <Button
             onClick={() => handleSubmit()}
-            disabled={submitted || submitting || (!answer && selectedOptions.length === 0)}
-            className="w-full shadow-button"
+            disabled={submitted || submitting || (!answer && selectedOptions.length === 0) || (question.type === "mcq" && question.correct_answers?.length > 1 && selectedOptions.length === 0)}
+            className="w-full shadow-button text-base md:text-lg py-3 md:py-4 min-h-[48px] touch-manipulation"
+            size="lg"
           >
             {submitted ? "Submitted" : submitting ? "Submitting..." : "Submit Answer"}
           </Button>
@@ -448,7 +483,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
                   }
                 }}
                 exit={{ opacity: 0, scale: 0.5, y: -50 }}
-                className={`p-6 rounded-xl text-center font-bold text-2xl shadow-lg ${
+                className={`p-4 md:p-6 rounded-xl text-center font-bold text-xl md:text-2xl shadow-lg ${
                   wasCorrect
                     ? "bg-gradient-to-r from-green-500/30 to-emerald-500/30 text-green-700 dark:text-green-300 border-2 border-green-500"
                     : "bg-gradient-to-r from-red-500/30 to-rose-500/30 text-red-700 dark:text-red-300 border-2 border-red-500"
