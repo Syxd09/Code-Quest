@@ -22,6 +22,7 @@ interface QuizQuestionProps {
 
 export const QuizQuestion = ({ question, gameId, participantId, revealSettings }: QuizQuestionProps) => {
   const isMobile = useIsMobile();
+  console.log("Mobile detection result:", isMobile, "Window innerWidth:", window.innerWidth, "Breakpoint:", 768);
   const [timeLeft, setTimeLeft] = useState(question.time_limit);
   const [answer, setAnswer] = useState<any>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -73,13 +74,23 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     console.log(`Cheat detected: ${reason}, isMobile: ${isMobile}`);
 
-    // For mobile devices, be more lenient but still detect serious violations
-    const isSeriousViolation = reason.includes("Debugger") || reason.includes("closure") ||
-                              reason.includes("rapid clicking") || reason.includes("keyboard activity");
+    // Enhanced mobile-specific violation classification
+    const isSeriousViolation = reason.includes("Debugger") || reason.includes("Developer tools") ||
+                              reason.includes("rapid clicking") || reason.includes("rapid touching") ||
+                              reason.includes("keyboard activity") || reason.includes("Performance monitoring");
 
-    if (isMobile && !isSeriousViolation) {
+    const isModerateViolation = reason.includes("Extended") || reason.includes("multi-touch") ||
+                               reason.includes("long touch") || reason.includes("special key");
+
+    if (isMobile && !isSeriousViolation && !isModerateViolation) {
       console.log("Minor cheat attempt on mobile, logging but not penalizing:", reason);
       return; // Skip penalty for minor violations on mobile
+    }
+
+    // For mobile moderate violations, use reduced penalty logic
+    if (isMobile && isModerateViolation && !isSeriousViolation) {
+      console.log("Moderate violation on mobile, applying lighter penalty:", reason);
+      // Could implement lighter penalties here if needed
     }
 
     try {
@@ -102,11 +113,35 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
       if (result.status === 'eliminated') {
         setEliminated(true);
-        setWarningMessage("You have been ELIMINATED from the game due to multiple cheat attempts!");
+        const eliminationMessage = isMobile
+          ? "You have been ELIMINATED from the game due to multiple violations on mobile device!"
+          : "You have been ELIMINATED from the game due to multiple cheat attempts!";
+        setWarningMessage(eliminationMessage);
         setShowWarning(true);
       } else {
-        const deviceMessage = isMobile ? " (Mobile device - limited restrictions apply)" : "";
-        setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}${deviceMessage}\n\n-50 points penalty!\n\nWarning ${result.cheat_count}/3: One more strike and you'll be eliminated!`);
+        let penaltyMessage = "";
+        if (isMobile) {
+          if (isSeriousViolation) {
+            if (result.cheat_count === 1) {
+              penaltyMessage = `🚫 SERIOUS FIRST VIOLATION DETECTED: ${reason}\n\n-75 points penalty on mobile!\n\nThis is your FIRST serious violation. Enhanced monitoring is now active. A second violation will result in harsher penalties.`;
+            } else if (result.cheat_count === 2) {
+              penaltyMessage = `🚫🚨 SERIOUS SECOND VIOLATION DETECTED: ${reason}\n\n-100 points penalty on mobile!\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
+            }
+          } else {
+            if (result.cheat_count === 1) {
+              penaltyMessage = `⚠️ FIRST VIOLATION DETECTED: ${reason}\n\n-35 points penalty (reduced for mobile)\n\nThis is your FIRST violation. Mobile-friendly monitoring is active. A second violation will increase penalties significantly.`;
+            } else if (result.cheat_count === 2) {
+              penaltyMessage = `⚠️🚨 SECOND VIOLATION DETECTED: ${reason}\n\n-50 points penalty on mobile\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
+            }
+          }
+        } else {
+          if (result.cheat_count === 1) {
+            penaltyMessage = `⚠️ FIRST CHEAT WARNING: ${reason}\n\n-50 points penalty!\n\nThis is your FIRST violation. A second violation will result in harsher penalties and stricter monitoring.`;
+          } else if (result.cheat_count === 2) {
+            penaltyMessage = `🚨 SECOND CHEAT WARNING: ${reason}\n\n-75 points penalty!\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
+          }
+        }
+        setWarningMessage(penaltyMessage);
         setShowWarning(true);
       }
     } catch (error: any) {
@@ -114,42 +149,113 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     }
   };
 
-  // Anti-cheat: Enhanced tab switching detection
+  // Anti-cheat: Enhanced tab switching and mobile app switching detection
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !submitted && !eliminated) {
-        console.log("Tab visibility change detected, isMobile:", isMobile);
-        // Allow some tab switching on mobile but still monitor
+        console.log("Visibility change detected, isMobile:", isMobile, "document.hidden:", document.hidden, "visibilityState:", document.visibilityState);
+
         if (!isMobile) {
+          // Desktop: strict tab switching detection
           handleCheatDetected("Tab switching detected");
         } else {
-          // On mobile, only penalize if it's clearly cheating (e.g., switching away for extended periods)
-          console.log("Tab switch on mobile - monitoring but not immediately penalizing");
+          // Mobile: more nuanced detection
+          // On mobile, visibility changes can happen due to notifications, calls, etc.
+          // Only penalize if it's clearly app switching behavior
+          const currentTime = Date.now();
+          if (lastFocusTime.current && (currentTime - lastFocusTime.current) < 2000) {
+            // Quick visibility changes might be notifications or overlays
+            console.log("Quick visibility change on mobile - likely notification or overlay");
+          } else {
+            console.log("App switch or background on mobile - monitoring");
+            // Store the time for later analysis
+            if (!lastFocusTime.current) {
+              lastFocusTime.current = currentTime;
+            }
+          }
         }
+      } else if (!document.hidden && !submitted && !eliminated && isMobile) {
+        // Mobile: check if returning from background
+        const currentTime = Date.now();
+        if (lastFocusTime.current) {
+          const timeAway = currentTime - lastFocusTime.current;
+          awayTime.current += timeAway;
+
+          // More lenient thresholds for mobile
+          if (timeAway > 10000) { // 10 seconds instead of 5
+            console.log(`Mobile app return after ${timeAway}ms away`);
+            if (timeAway > 30000) { // Only penalize very long absences (30+ seconds)
+              handleCheatDetected("Extended mobile app absence detected");
+            }
+          }
+        }
+        lastFocusTime.current = currentTime;
       }
     };
 
     const handleBlur = () => {
       if (!submitted && !eliminated) {
         lastFocusTime.current = Date.now();
-        console.log("Window blur detected");
+        console.log("Window blur detected, isMobile:", isMobile);
       }
     };
 
     const handleFocus = () => {
       if (!submitted && !eliminated) {
         const currentTime = Date.now();
-        const timeAway = currentTime - lastFocusTime.current;
-        awayTime.current += timeAway;
+        if (lastFocusTime.current) {
+          const timeAway = currentTime - lastFocusTime.current;
+          awayTime.current += timeAway;
 
-        // If away for more than 5 seconds, consider it suspicious
-        if (timeAway > 5000) {
-          console.log(`Suspicious focus return after ${timeAway}ms away`);
           if (!isMobile) {
-            handleCheatDetected("Extended tab switching detected");
-          } else if (timeAway > 15000) { // More lenient on mobile, but still penalize very long absences
-            handleCheatDetected("Extended absence on mobile detected");
+            // Desktop: strict focus monitoring
+            if (timeAway > 5000) {
+              console.log(`Desktop focus return after ${timeAway}ms away`);
+              handleCheatDetected("Extended tab switching detected");
+            }
+          } else {
+            // Mobile: more lenient but still monitoring
+            if (timeAway > 15000) {
+              console.log(`Mobile focus return after ${timeAway}ms away`);
+              if (timeAway > 45000) { // Very long absences on mobile
+                handleCheatDetected("Extended mobile absence detected");
+              }
+            }
           }
+        }
+        lastFocusTime.current = currentTime;
+      }
+    };
+
+    // Mobile-specific: detect pagehide/pagehide events for app switching
+    const handlePageHide = (e: PageTransitionEvent) => {
+      if (!submitted && !eliminated && isMobile) {
+        console.log("Mobile page hide detected - potential app switch");
+        // On mobile, pagehide often means app switching
+        if (e.persisted === false) {
+          // Page is being unloaded, likely app switch
+          console.log("Mobile app switch detected via pagehide");
+          // Don't immediately penalize, but log for pattern analysis
+        }
+      }
+    };
+
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (!submitted && !eliminated && isMobile) {
+        console.log("Mobile page show detected - returning to app");
+        if (e.persisted) {
+          // Page was restored from cache, likely returning from app switch
+          const currentTime = Date.now();
+          if (lastFocusTime.current) {
+            const timeAway = currentTime - lastFocusTime.current;
+            if (timeAway > 20000) {
+              console.log(`Mobile app return after ${timeAway}ms via page restore`);
+              if (timeAway > 60000) { // 1 minute absence
+                handleCheatDetected("Extended mobile app switching detected");
+              }
+            }
+          }
+          lastFocusTime.current = currentTime;
         }
       }
     };
@@ -157,11 +263,15 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("blur", handleBlur);
     window.addEventListener("focus", handleFocus);
+    window.addEventListener("pagehide", handlePageHide);
+    window.addEventListener("pageshow", handlePageShow);
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("blur", handleBlur);
       window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("pagehide", handlePageHide);
+      window.removeEventListener("pageshow", handlePageShow);
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
@@ -206,18 +316,48 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: Enhanced DevTools detection
+  // Anti-cheat: Enhanced DevTools detection with mobile compatibility
   useEffect(() => {
     const detectDevTools = () => {
-      const threshold = 160;
-      const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-      const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+      let hasDevTools = false;
 
-      // Additional DevTools detection methods
-      const hasDevTools = widthThreshold || heightThreshold ||
-        (window.console && window.console.clear && typeof window.console.clear === 'function' && Math.random() < 0.01) || // Random check to avoid easy bypass
-        (window.outerHeight - window.innerHeight > 200) ||
-        (window.outerWidth - window.innerWidth > 200);
+      if (isMobile) {
+        // Mobile-specific DevTools detection
+        const mobileThreshold = 100; // Lower threshold for mobile
+        const widthDiff = window.outerWidth - window.innerWidth;
+        const heightDiff = window.outerHeight - window.innerHeight;
+
+        // Check for common mobile DevTools indicators
+        hasDevTools = widthDiff > mobileThreshold || heightDiff > mobileThreshold ||
+          // Check for mobile DevTools specific patterns
+          (navigator.userAgent.includes('Mobile') && (widthDiff > 50 || heightDiff > 50)) ||
+          // Performance-based detection for mobile
+          (performance.now() - performance.timing.navigationStart > 10000 && Math.random() < 0.05);
+
+        // Additional mobile checks
+        if (window.innerWidth < 400 && (widthDiff > 30 || heightDiff > 30)) {
+          hasDevTools = true;
+        }
+      } else {
+        // Desktop DevTools detection
+        const threshold = 160;
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+        hasDevTools = widthThreshold || heightThreshold ||
+          (window.outerHeight - window.innerHeight > 200) ||
+          (window.outerWidth - window.innerWidth > 200);
+      }
+
+      // Common checks for both mobile and desktop
+      if (window.console && typeof window.console.clear === 'function') {
+        // Random sampling to avoid easy bypass
+        if (Math.random() < 0.01) {
+          hasDevTools = hasDevTools || true;
+        }
+      }
+
+      console.log("DevTools check - width diff:", window.outerWidth - window.innerWidth, "height diff:", window.outerHeight - window.innerHeight, "hasDevTools:", hasDevTools, "isMobile:", isMobile);
 
       if (hasDevTools) {
         console.log("DevTools detection triggered, isMobile:", isMobile);
@@ -228,26 +368,45 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       }
     };
 
-    // Check for debugger statements or breakpoints
+    // Enhanced debugger detection with mobile considerations
     const checkForDebugger = () => {
       const start = performance.now();
       // eslint-disable-next-line no-debugger
       debugger; // This will be caught if DevTools is open
       const end = performance.now();
-      if (end - start > 100) { // If it took more than 100ms, DevTools might be open
-        console.log("Debugger statement detected, potential DevTools usage");
+      const threshold = isMobile ? 200 : 100; // Higher threshold for mobile due to potential lag
+
+      if (end - start > threshold) {
+        console.log("Debugger statement detected, potential DevTools usage on", isMobile ? "mobile" : "desktop");
         if (!submitted && !eliminated) {
           handleCheatDetected("Debugger usage detected");
         }
       }
     };
 
+    // Mobile-specific DevTools detection using performance metrics
+    const checkMobileDevTools = () => {
+      if (!isMobile) return;
+
+      // Check for unusual performance patterns that might indicate DevTools
+      const entries = performance.getEntriesByType('measure');
+      if (entries.length > 10) { // Too many performance measures might indicate debugging
+        console.log("Suspicious performance monitoring detected on mobile");
+        if (!submitted && !eliminated) {
+          handleCheatDetected("Performance monitoring detected");
+        }
+      }
+    };
+
     devToolsCheckInterval.current = setInterval(() => {
       detectDevTools();
-      if (Math.random() < 0.1) { // Randomly check for debugger to avoid easy bypass
+      if (Math.random() < 0.1) { // Randomly check for debugger
         checkForDebugger();
       }
-    }, 1000);
+      if (isMobile && Math.random() < 0.05) { // Additional mobile checks
+        checkMobileDevTools();
+      }
+    }, isMobile ? 2000 : 1000); // Less frequent checks on mobile to reduce battery impact
 
     return () => {
       if (devToolsCheckInterval.current) {
@@ -256,59 +415,126 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: Enhanced copy-paste and selection prevention
+  // Anti-cheat: Mobile-compatible copy-paste and interaction restrictions
   useEffect(() => {
+    let pasteCount = 0;
+    let lastPasteTime = 0;
+    let copyCount = 0;
+    let lastCopyTime = 0;
+
     const handlePaste = (e: ClipboardEvent) => {
       console.log("Paste event detected, isMobile:", isMobile);
-      // Allow paste on mobile for usability, but still detect and penalize if excessive
-      if (!submitted && !eliminated && !isMobile) {
+      if (submitted || eliminated) return;
+
+      const currentTime = Date.now();
+      pasteCount += 1;
+
+      if (!isMobile) {
         e.preventDefault();
         handleCheatDetected("Copy-paste attempt detected");
-      } else if (isMobile) {
-        console.log("Paste allowed on mobile, but monitoring for abuse");
-        // Could add logic here to detect excessive pasting on mobile
+      } else {
+        // Mobile: allow paste but monitor for abuse
+        console.log("Paste allowed on mobile, monitoring for abuse");
+
+        // Detect rapid pasting (potential automation)
+        if (currentTime - lastPasteTime < 500 && pasteCount > 3) {
+          console.log("Rapid pasting detected on mobile");
+          handleCheatDetected("Suspicious rapid pasting on mobile detected");
+        }
+
+        // Reset paste count every 5 seconds
+        if (currentTime - lastPasteTime > 5000) {
+          pasteCount = 1;
+        }
+
+        lastPasteTime = currentTime;
       }
     };
 
     const handleCopy = (e: ClipboardEvent) => {
       console.log("Copy event detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (submitted || eliminated) return;
+
+      const currentTime = Date.now();
+      copyCount += 1;
+
+      if (!isMobile) {
         e.preventDefault();
         handleCheatDetected("Copy attempt detected");
-      } else if (isMobile) {
-        console.log("Copy allowed on mobile for sharing purposes");
+      } else {
+        // Mobile: allow copy for sharing but monitor
+        console.log("Copy allowed on mobile for sharing");
+
+        // Detect excessive copying
+        if (currentTime - lastCopyTime < 1000 && copyCount > 5) {
+          console.log("Excessive copying detected on mobile");
+          handleCheatDetected("Excessive copying on mobile detected");
+        }
+
+        // Reset copy count every 10 seconds
+        if (currentTime - lastCopyTime > 10000) {
+          copyCount = 1;
+        }
+
+        lastCopyTime = currentTime;
       }
     };
 
     const handleContextMenu = (e: MouseEvent) => {
       console.log("Context menu attempt detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (submitted || eliminated) return;
+
+      if (!isMobile) {
         e.preventDefault();
         handleCheatDetected("Context menu usage detected");
-      } else if (isMobile) {
-        console.log("Context menu allowed on mobile (long press)");
+      } else {
+        // Mobile: context menu is often long press, allow but monitor frequency
+        console.log("Context menu (long press) on mobile - allowed but monitored");
       }
     };
 
     const handleSelectStart = (e: Event) => {
       console.log("Text selection attempt detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (submitted || eliminated) return;
+
+      if (!isMobile) {
         e.preventDefault();
         handleCheatDetected("Text selection attempt detected");
-      } else if (isMobile) {
+      } else {
+        // Mobile: allow text selection for usability
         console.log("Text selection allowed on mobile for usability");
       }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (submitted || eliminated) return;
+
       // Prevent Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X on desktop
-      if (!submitted && !eliminated && !isMobile && (e.ctrlKey || e.metaKey)) {
+      if (!isMobile && (e.ctrlKey || e.metaKey)) {
         if (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x') {
           e.preventDefault();
           handleCheatDetected(`Keyboard shortcut ${e.key.toUpperCase()} detected`);
         }
       }
-      // On mobile, keyboard shortcuts are less relevant
+
+      // Mobile-specific keyboard monitoring
+      if (isMobile) {
+        // Detect potential external keyboard or automation on mobile
+        if (e.ctrlKey || e.metaKey || e.altKey) {
+          console.log("Modifier key detected on mobile:", e.key, "modifiers:", {ctrl: e.ctrlKey, meta: e.metaKey, alt: e.altKey});
+          handleCheatDetected("Modifier key usage on mobile detected");
+        }
+
+        // Detect rapid key presses that might indicate automation
+        if (e.repeat && Math.random() < 0.1) { // Sample 10% of repeats
+          console.log("Key repeat detected on mobile");
+          suspiciousActivityCount.current += 1;
+          if (suspiciousActivityCount.current > 8) {
+            handleCheatDetected("Suspicious keyboard activity on mobile detected");
+            suspiciousActivityCount.current = 0;
+          }
+        }
+      }
     };
 
     document.addEventListener("paste", handlePaste);
@@ -326,17 +552,23 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: Suspicious behavior detection
+  // Anti-cheat: Enhanced suspicious behavior detection with touch support
   useEffect(() => {
+    let touchStartTime = 0;
+    let touchCount = 0;
+    let lastTouchTime = 0;
+
     const handleClick = (e: MouseEvent) => {
-      if (submitted || eliminated) return;
+      if (submitted || eliminated || isMobile) return; // Skip mouse events on mobile
 
       const currentTime = Date.now();
       clickCount.current += 1;
 
+      console.log("Desktop click detected - count:", clickCount.current, "time diff:", currentTime - lastClickTime.current);
+
       // Detect rapid clicking (more than 10 clicks per second)
       if (currentTime - lastClickTime.current < 100 && clickCount.current > 10) {
-        console.log("Rapid clicking detected");
+        console.log("Rapid clicking detected on desktop");
         suspiciousActivityCount.current += 1;
         if (suspiciousActivityCount.current > 3) {
           handleCheatDetected("Suspicious rapid clicking detected");
@@ -352,6 +584,59 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       lastClickTime.current = currentTime;
     };
 
+    const handleTouchStart = (e: TouchEvent) => {
+      if (submitted || eliminated || !isMobile) return;
+
+      const currentTime = Date.now();
+      touchCount += 1;
+
+      console.log("Touch detected - count:", touchCount, "time diff:", currentTime - lastTouchTime, "touches:", e.touches.length);
+
+      // Detect rapid touching (more than 15 touches per second on mobile)
+      if (currentTime - lastTouchTime < 67 && touchCount > 15) { // ~15 touches/second threshold
+        console.log("Rapid touching detected on mobile");
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 5) { // Higher threshold for mobile
+          handleCheatDetected("Suspicious rapid touching detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
+
+      // Detect multi-touch gestures that might indicate automation
+      if (e.touches.length > 3) {
+        console.log("Multi-touch gesture detected");
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 8) {
+          handleCheatDetected("Suspicious multi-touch activity detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
+
+      // Reset touch count every second
+      if (currentTime - lastTouchTime > 1000) {
+        touchCount = 1;
+      }
+
+      lastTouchTime = currentTime;
+      touchStartTime = currentTime;
+    };
+
+    const handleTouchEnd = (e: TouchEvent) => {
+      if (submitted || eliminated || !isMobile) return;
+
+      const touchDuration = Date.now() - touchStartTime;
+
+      // Detect unusually long touches that might indicate holding for automation
+      if (touchDuration > 3000) { // 3 seconds
+        console.log("Unusually long touch detected:", touchDuration, "ms");
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 6) {
+          handleCheatDetected("Suspicious long touch detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
+    };
+
     const handleKeyPress = (e: KeyboardEvent) => {
       if (submitted || eliminated) return;
 
@@ -364,16 +649,49 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
           suspiciousActivityCount.current = 0;
         }
       }
+
+      // On mobile, keyboard events are less common and might indicate external keyboard
+      if (isMobile && e.key.length > 1) { // Special keys or combinations
+        console.log("Special key detected on mobile:", e.key);
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 7) {
+          handleCheatDetected("Suspicious keyboard input on mobile detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
     };
 
+    // Mobile-specific: detect orientation changes that might indicate device manipulation
+    const handleOrientationChange = () => {
+      if (!isMobile || submitted || eliminated) return;
+
+      console.log("Device orientation changed");
+      // Orientation changes are normal on mobile, but rapid changes might be suspicious
+      // This is more for monitoring than immediate penalization
+    };
+
+    // Desktop events
     document.addEventListener("click", handleClick);
     document.addEventListener("keypress", handleKeyPress);
+
+    // Mobile touch events
+    if (isMobile) {
+      document.addEventListener("touchstart", handleTouchStart);
+      document.addEventListener("touchend", handleTouchEnd);
+      window.addEventListener("orientationchange", handleOrientationChange);
+    }
 
     return () => {
       document.removeEventListener("click", handleClick);
       document.removeEventListener("keypress", handleKeyPress);
+
+      if (isMobile) {
+        document.removeEventListener("touchstart", handleTouchStart);
+        document.removeEventListener("touchend", handleTouchEnd);
+        window.removeEventListener("orientationchange", handleOrientationChange);
+      }
     };
-  }, [submitted, eliminated, cheatCount]);
+  }, [submitted, eliminated, cheatCount, isMobile]);
 
   // Reset state when question changes
   useEffect(() => {
