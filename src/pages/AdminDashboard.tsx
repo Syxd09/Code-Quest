@@ -22,19 +22,24 @@ const AdminDashboard = () => {
   const [showQR, setShowQR] = useState(false);
   const [showQuestionForm, setShowQuestionForm] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [revealLoading, setRevealLoading] = useState(false);
+  const [nextQuestionLoading, setNextQuestionLoading] = useState(false);
 
   useEffect(() => {
     if (!gameId) return;
 
     const fetchData = async () => {
+      console.log("AdminDashboard fetchData called");
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
+          console.log("No user found, redirecting to auth");
           toast.error("Please sign in");
           navigate("/auth");
           return;
         }
 
+        console.log("Fetching admin game data");
         const { data: gameData, error: gameError } = await supabase
           .from("games")
           .select("*")
@@ -43,12 +48,14 @@ const AdminDashboard = () => {
 
         if (gameError) throw gameError;
         if (!gameData) {
+          console.log("Game not found");
           toast.error("Game not found");
           navigate("/");
           return;
         }
 
         if (gameData.admin_id !== user.id) {
+          console.log("Unauthorized access attempt");
           toast.error("Unauthorized");
           navigate("/");
           return;
@@ -56,6 +63,7 @@ const AdminDashboard = () => {
 
         setGame(gameData);
 
+        console.log("Fetching questions data");
         const { data: questionsData } = await supabase
           .from("questions")
           .select("*")
@@ -64,6 +72,7 @@ const AdminDashboard = () => {
 
         setQuestions(questionsData || []);
 
+        console.log("Fetching participants data");
         const { data: participantsData } = await supabase
           .from("participants")
           .select("*")
@@ -71,7 +80,9 @@ const AdminDashboard = () => {
           .order("score", { ascending: false });
 
         setParticipants(participantsData || []);
+        console.log("AdminDashboard fetchData completed");
       } catch (error: any) {
+        console.error("Error in AdminDashboard fetchData:", error);
         toast.error(error.message);
       } finally {
         setLoading(false);
@@ -85,17 +96,26 @@ const AdminDashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "participants", filter: `game_id=eq.${gameId}` },
-        () => fetchData()
+        (payload) => {
+          console.log("Participants table change detected:", payload);
+          fetchData();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "questions", filter: `game_id=eq.${gameId}` },
-        () => fetchData()
+        (payload) => {
+          console.log("Questions table change detected:", payload);
+          fetchData();
+        }
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "games", filter: `id=eq.${gameId}` },
-        () => fetchData()
+        (payload) => {
+          console.log("Games table change detected:", payload);
+          fetchData();
+        }
       )
       .subscribe();
 
@@ -126,38 +146,54 @@ const AdminDashboard = () => {
   };
 
   const revealAnswer = async () => {
+    if (revealLoading) return;
+    console.log("Reveal Answer button clicked");
+    setRevealLoading(true);
     try {
       if (!game?.current_question_id) {
+        console.log("No active question to reveal");
         toast.error("No active question to reveal");
         return;
       }
 
+      console.log("Updating game settings to reveal answer");
       await supabase
         .from("games")
-        .update({ 
-          settings: { 
-            ...game.settings, 
+        .update({
+          settings: {
+            ...game.settings,
             reveal_question_id: game.current_question_id,
             reveal_timestamp: Date.now()
-          } 
+          }
         })
         .eq("id", gameId);
-      
+
+      console.log("Answer revealed successfully");
       toast.success("Answer revealed to participants");
     } catch (error: any) {
+      console.error("Error revealing answer:", error);
       toast.error(error.message);
+    } finally {
+      setRevealLoading(false);
     }
   };
 
   const nextQuestion = async () => {
+    if (nextQuestionLoading) return;
+    console.log("Next Question button clicked");
+    setNextQuestionLoading(true);
     const currentIndex = questions.findIndex((q) => q.id === game?.current_question_id);
+    console.log("Current question index:", currentIndex);
     const nextQ = questions[currentIndex + 1];
 
     if (!nextQ) {
+      console.log("No more questions available");
       toast.error("No more questions");
+      setNextQuestionLoading(false);
       return;
     }
 
+    console.log("Moving to next question:", nextQ.id);
     try {
       const { error } = await supabase
         .from("games")
@@ -165,9 +201,13 @@ const AdminDashboard = () => {
         .eq("id", gameId);
 
       if (error) throw error;
+      console.log("Successfully moved to next question");
       toast.success("Moved to next question");
     } catch (error: any) {
+      console.error("Error moving to next question:", error);
       toast.error(error.message);
+    } finally {
+      setNextQuestionLoading(false);
     }
   };
 
@@ -234,13 +274,13 @@ const AdminDashboard = () => {
                 <Pause className="w-4 h-4 mr-2" />
                 Pause
               </Button>
-              <Button onClick={revealAnswer} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation">
+              <Button onClick={revealAnswer} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation" disabled={revealLoading}>
                 <Eye className="w-4 h-4 mr-2" />
-                Reveal Answer
+                {revealLoading ? "Revealing..." : "Reveal Answer"}
               </Button>
-              <Button onClick={nextQuestion} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation">
+              <Button onClick={nextQuestion} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation" disabled={nextQuestionLoading}>
                 <SkipForward className="w-4 h-4 mr-2" />
-                Next Question
+                {nextQuestionLoading ? "Loading..." : "Next Question"}
               </Button>
               <Button
                 onClick={() => updateGameStatus("ended")}

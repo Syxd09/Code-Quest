@@ -37,6 +37,11 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const [warningMessage, setWarningMessage] = useState("");
   const tabSwitchCount = useRef(0);
   const devToolsCheckInterval = useRef<NodeJS.Timeout>();
+  const lastFocusTime = useRef(Date.now());
+  const awayTime = useRef(0);
+  const clickCount = useRef(0);
+  const lastClickTime = useRef(0);
+  const suspiciousActivityCount = useRef(0);
 
   // Load initial cheat count with grace period for mobile joins
   useEffect(() => {
@@ -68,6 +73,15 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     console.log(`Cheat detected: ${reason}, isMobile: ${isMobile}`);
 
+    // For mobile devices, be more lenient but still detect serious violations
+    const isSeriousViolation = reason.includes("Debugger") || reason.includes("closure") ||
+                              reason.includes("rapid clicking") || reason.includes("keyboard activity");
+
+    if (isMobile && !isSeriousViolation) {
+      console.log("Minor cheat attempt on mobile, logging but not penalizing:", reason);
+      return; // Skip penalty for minor violations on mobile
+    }
+
     try {
       const { data, error } = await supabase.rpc('handle_cheat_detection', {
         p_participant_id: participantId,
@@ -91,7 +105,8 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         setWarningMessage("You have been ELIMINATED from the game due to multiple cheat attempts!");
         setShowWarning(true);
       } else {
-        setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}\n\n-50 points penalty!\n\nWarning ${result.cheat_count}/3: One more strike and you'll be eliminated!`);
+        const deviceMessage = isMobile ? " (Mobile device - limited restrictions apply)" : "";
+        setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}${deviceMessage}\n\n-50 points penalty!\n\nWarning ${result.cheat_count}/3: One more strike and you'll be eliminated!`);
         setShowWarning(true);
       }
     } catch (error: any) {
@@ -99,59 +114,140 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     }
   };
 
-  // Anti-cheat: Tab visibility detection
+  // Anti-cheat: Enhanced tab switching detection
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !submitted && !eliminated) {
         console.log("Tab visibility change detected, isMobile:", isMobile);
+        // Allow some tab switching on mobile but still monitor
         if (!isMobile) {
           handleCheatDetected("Tab switching detected");
         } else {
-          console.log("Ignoring tab switch on mobile device");
+          // On mobile, only penalize if it's clearly cheating (e.g., switching away for extended periods)
+          console.log("Tab switch on mobile - monitoring but not immediately penalizing");
         }
       }
     };
+
+    const handleBlur = () => {
+      if (!submitted && !eliminated) {
+        lastFocusTime.current = Date.now();
+        console.log("Window blur detected");
+      }
+    };
+
+    const handleFocus = () => {
+      if (!submitted && !eliminated) {
+        const currentTime = Date.now();
+        const timeAway = currentTime - lastFocusTime.current;
+        awayTime.current += timeAway;
+
+        // If away for more than 5 seconds, consider it suspicious
+        if (timeAway > 5000) {
+          console.log(`Suspicious focus return after ${timeAway}ms away`);
+          if (!isMobile) {
+            handleCheatDetected("Extended tab switching detected");
+          } else if (timeAway > 15000) { // More lenient on mobile, but still penalize very long absences
+            handleCheatDetected("Extended absence on mobile detected");
+          }
+        }
+      }
+    };
+
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("blur", handleBlur);
+    window.addEventListener("focus", handleFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("blur", handleBlur);
+      window.removeEventListener("focus", handleFocus);
+    };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: Browser back button detection
+  // Anti-cheat: Browser back button and app closure detection
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
       console.log("Browser back button detected, isMobile:", isMobile);
+      // Browser back button is generally not a cheating method on mobile, but still monitor
       if (!submitted && !eliminated && !isMobile) {
         handleCheatDetected("Browser back button usage detected");
         window.history.pushState(null, "", window.location.href);
       } else if (isMobile) {
-        console.log("Ignoring browser back button on mobile device");
+        console.log("Browser back button on mobile - not considered cheating");
+      }
+    };
+
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (!submitted && !eliminated) {
+        console.log("App closure attempt detected");
+        // Note: Modern browsers limit what we can do here, but we can still detect the attempt
+        handleCheatDetected("App closure attempt detected");
+      }
+    };
+
+    const handlePageHide = (e: PageTransitionEvent) => {
+      if (!submitted && !eliminated && e.persisted === false) {
+        console.log("Page hide detected (potential app closure)");
+        handleCheatDetected("App closure detected");
       }
     };
 
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", handlePopState);
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener("pagehide", handlePageHide);
 
-    return () => window.removeEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      window.removeEventListener("pagehide", handlePageHide);
+    };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: DevTools detection
+  // Anti-cheat: Enhanced DevTools detection
   useEffect(() => {
     const detectDevTools = () => {
       const threshold = 160;
       const widthThreshold = window.outerWidth - window.innerWidth > threshold;
       const heightThreshold = window.outerHeight - window.innerHeight > threshold;
 
-      if (widthThreshold || heightThreshold) {
+      // Additional DevTools detection methods
+      const hasDevTools = widthThreshold || heightThreshold ||
+        (window.console && window.console.clear && typeof window.console.clear === 'function' && Math.random() < 0.01) || // Random check to avoid easy bypass
+        (window.outerHeight - window.innerHeight > 200) ||
+        (window.outerWidth - window.innerWidth > 200);
+
+      if (hasDevTools) {
         console.log("DevTools detection triggered, isMobile:", isMobile);
-        if (!submitted && !eliminated && !isMobile) {
+        // DevTools detection is serious on any device
+        if (!submitted && !eliminated) {
           handleCheatDetected("Developer tools opened");
-        } else if (isMobile) {
-          console.log("Ignoring DevTools detection on mobile device");
         }
       }
     };
 
-    devToolsCheckInterval.current = setInterval(detectDevTools, 1000);
+    // Check for debugger statements or breakpoints
+    const checkForDebugger = () => {
+      const start = performance.now();
+      // eslint-disable-next-line no-debugger
+      debugger; // This will be caught if DevTools is open
+      const end = performance.now();
+      if (end - start > 100) { // If it took more than 100ms, DevTools might be open
+        console.log("Debugger statement detected, potential DevTools usage");
+        if (!submitted && !eliminated) {
+          handleCheatDetected("Debugger usage detected");
+        }
+      }
+    };
+
+    devToolsCheckInterval.current = setInterval(() => {
+      detectDevTools();
+      if (Math.random() < 0.1) { // Randomly check for debugger to avoid easy bypass
+        checkForDebugger();
+      }
+    }, 1000);
 
     return () => {
       if (devToolsCheckInterval.current) {
@@ -160,15 +256,17 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
 
-  // Anti-cheat: Copy-paste detection
+  // Anti-cheat: Enhanced copy-paste and selection prevention
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
       console.log("Paste event detected, isMobile:", isMobile);
+      // Allow paste on mobile for usability, but still detect and penalize if excessive
       if (!submitted && !eliminated && !isMobile) {
         e.preventDefault();
         handleCheatDetected("Copy-paste attempt detected");
       } else if (isMobile) {
-        console.log("Allowing paste on mobile device");
+        console.log("Paste allowed on mobile, but monitoring for abuse");
+        // Could add logic here to detect excessive pasting on mobile
       }
     };
 
@@ -178,18 +276,104 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         e.preventDefault();
         handleCheatDetected("Copy attempt detected");
       } else if (isMobile) {
-        console.log("Allowing copy on mobile device");
+        console.log("Copy allowed on mobile for sharing purposes");
       }
+    };
+
+    const handleContextMenu = (e: MouseEvent) => {
+      console.log("Context menu attempt detected, isMobile:", isMobile);
+      if (!submitted && !eliminated && !isMobile) {
+        e.preventDefault();
+        handleCheatDetected("Context menu usage detected");
+      } else if (isMobile) {
+        console.log("Context menu allowed on mobile (long press)");
+      }
+    };
+
+    const handleSelectStart = (e: Event) => {
+      console.log("Text selection attempt detected, isMobile:", isMobile);
+      if (!submitted && !eliminated && !isMobile) {
+        e.preventDefault();
+        handleCheatDetected("Text selection attempt detected");
+      } else if (isMobile) {
+        console.log("Text selection allowed on mobile for usability");
+      }
+    };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Prevent Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X on desktop
+      if (!submitted && !eliminated && !isMobile && (e.ctrlKey || e.metaKey)) {
+        if (e.key === 'a' || e.key === 'c' || e.key === 'v' || e.key === 'x') {
+          e.preventDefault();
+          handleCheatDetected(`Keyboard shortcut ${e.key.toUpperCase()} detected`);
+        }
+      }
+      // On mobile, keyboard shortcuts are less relevant
     };
 
     document.addEventListener("paste", handlePaste);
     document.addEventListener("copy", handleCopy);
+    document.addEventListener("contextmenu", handleContextMenu);
+    document.addEventListener("selectstart", handleSelectStart);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.removeEventListener("paste", handlePaste);
       document.removeEventListener("copy", handleCopy);
+      document.removeEventListener("contextmenu", handleContextMenu);
+      document.removeEventListener("selectstart", handleSelectStart);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [submitted, eliminated, cheatCount, isMobile]);
+
+  // Anti-cheat: Suspicious behavior detection
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (submitted || eliminated) return;
+
+      const currentTime = Date.now();
+      clickCount.current += 1;
+
+      // Detect rapid clicking (more than 10 clicks per second)
+      if (currentTime - lastClickTime.current < 100 && clickCount.current > 10) {
+        console.log("Rapid clicking detected");
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 3) {
+          handleCheatDetected("Suspicious rapid clicking detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
+
+      // Reset click count every second
+      if (currentTime - lastClickTime.current > 1000) {
+        clickCount.current = 1;
+      }
+
+      lastClickTime.current = currentTime;
+    };
+
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (submitted || eliminated) return;
+
+      // Detect unusual input patterns (holding down keys rapidly)
+      if (e.repeat && Math.random() < 0.05) { // Random sampling to avoid false positives
+        console.log("Unusual key repeat detected");
+        suspiciousActivityCount.current += 1;
+        if (suspiciousActivityCount.current > 5) {
+          handleCheatDetected("Suspicious keyboard activity detected");
+          suspiciousActivityCount.current = 0;
+        }
+      }
+    };
+
+    document.addEventListener("click", handleClick);
+    document.addEventListener("keypress", handleKeyPress);
+
+    return () => {
+      document.removeEventListener("click", handleClick);
+      document.removeEventListener("keypress", handleKeyPress);
+    };
+  }, [submitted, eliminated, cheatCount]);
 
   // Reset state when question changes
   useEffect(() => {
@@ -203,7 +387,48 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     setShowReveal(false);
     setShowWarning(false);
     tabSwitchCount.current = 0;
-  }, [question.id, question.time_limit]);
+    awayTime.current = 0;
+    clickCount.current = 0;
+    lastClickTime.current = Date.now();
+    suspiciousActivityCount.current = 0;
+
+    // Check if user has already submitted a response for this question
+    const checkExistingResponse = async () => {
+      try {
+        const { data: existingResponse, error } = await supabase
+          .from("responses")
+          .select("*")
+          .eq("question_id", question.id)
+          .eq("participant_id", participantId)
+          .maybeSingle();
+
+        if (!error && existingResponse) {
+          console.log("Found existing response for question:", question.id);
+          // Restore the submitted state and answer
+          setSubmitted(true);
+          setWasCorrect(existingResponse.correct);
+
+          // Restore the answer based on question type
+          if (question.type === "mcq") {
+            if (question.correct_answers?.length === 1) {
+              setAnswer(existingResponse.answer);
+            } else {
+              setSelectedOptions(existingResponse.answer as string[]);
+            }
+          } else if (question.type === "short") {
+            setAnswer(existingResponse.answer);
+          }
+
+          // Stop the timer since already submitted
+          setTimeLeft(0);
+        }
+      } catch (error) {
+        console.error("Error checking existing response:", error);
+      }
+    };
+
+    checkExistingResponse();
+  }, [question.id, question.time_limit, participantId]);
 
   useEffect(() => {
     if (submitted) return;

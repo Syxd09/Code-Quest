@@ -30,6 +30,7 @@ const PlayQuiz = () => {
   const [cachedParticipants, setCachedParticipants] = useState<any[]>([]);
   const [cachedGame, setCachedGame] = useState<any>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
+  const [fetchDataLoading, setFetchDataLoading] = useState(false);
 
   useEffect(() => {
     if (!gameId) return;
@@ -43,76 +44,123 @@ const PlayQuiz = () => {
     const { userId } = JSON.parse(sessionData);
 
     const fetchData = async () => {
+      if (fetchDataLoading) {
+        console.log("fetchData already in progress, skipping");
+        return;
+      }
+      console.log("fetchData called");
+      setFetchDataLoading(true);
       try {
         const {
           data: { user },
         } = await supabase.auth.getUser();
 
         if (!user) {
+          console.log("No user found, redirecting to auth");
           localStorage.setItem("redirectTo", window.location.pathname);
           navigate("/auth");
           return;
         }
 
-        const { data: gameData, error: gameError } = await supabase
-          .from("games")
-          .select("*")
-          .eq("id", gameId)
-          .maybeSingle();
+        // Use cached data if available and not stale
+        const cachedGameData = cachedGame;
+        const cachedParticipantsData = cachedParticipants;
 
-        if (gameError) throw gameError;
-        if (!gameData) {
-          toast.error("Game not found");
-          navigate(`/join/${gameId}`);
-          return;
+        let gameData = cachedGameData;
+        let participantData = participant;
+        let questionData = currentQuestion;
+        let participantsData = cachedParticipantsData;
+
+        // Only fetch game data if not cached or if we need fresh data
+        if (!cachedGameData || cachedGameData.id !== gameId) {
+          console.log("Fetching game data (not cached)");
+          const { data: freshGameData, error: gameError } = await supabase
+            .from("games")
+            .select("*")
+            .eq("id", gameId)
+            .maybeSingle();
+
+          if (gameError) throw gameError;
+          if (!freshGameData) {
+            console.log("Game not found");
+            toast.error("Game not found");
+            navigate(`/join/${gameId}`);
+            return;
+          }
+          gameData = freshGameData;
+          setGame(freshGameData);
+          setCachedGame(freshGameData);
+        } else {
+          console.log("Using cached game data");
+          setGame(cachedGameData);
         }
 
-        setGame(gameData);
-        setCachedGame(gameData);
+        // Only fetch participant data if not cached
+        if (!participant || participant.game_id !== gameId) {
+          console.log("Fetching participant data (not cached)");
+          const { data: freshParticipantData, error: participantError } = await supabase
+            .from("participants")
+            .select("*")
+            .eq("game_id", gameId)
+            .eq("user_id", user.id)
+            .maybeSingle();
 
-        const { data: participantData, error: participantError } = await supabase
-          .from("participants")
-          .select("*")
-          .eq("game_id", gameId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-
-        if (participantError) throw participantError;
-        if (!participantData) {
-          navigate(`/join/${gameId}`);
-          return;
+          if (participantError) throw participantError;
+          if (!freshParticipantData) {
+            console.log("Participant not found");
+            navigate(`/join/${gameId}`);
+            return;
+          }
+          participantData = freshParticipantData;
+          setPreviousScore(participant?.score || 0);
+          setParticipant(freshParticipantData);
+        } else {
+          console.log("Using cached participant data");
         }
 
-        setPreviousScore(participant?.score || 0);
-        setParticipant(participantData);
-
-        if (gameData.current_question_id) {
-          const { data: questionData, error: questionError } = await supabase
+        // Only fetch question data if current_question_id changed
+        if (gameData.current_question_id && gameData.current_question_id !== currentQuestion?.id) {
+          console.log("Fetching current question data (question changed)");
+          const { data: freshQuestionData, error: questionError } = await supabase
             .from("questions")
             .select("*")
             .eq("id", gameData.current_question_id)
             .maybeSingle();
 
-          if (!questionError && questionData) {
-            setCurrentQuestion(questionData);
+          if (!questionError && freshQuestionData) {
+            questionData = freshQuestionData;
+            setCurrentQuestion(freshQuestionData);
           } else {
             setCurrentQuestion(null);
           }
-        } else {
+        } else if (!gameData.current_question_id) {
           setCurrentQuestion(null);
+        } else {
+          console.log("Using cached question data");
         }
 
-        const { data: participantsData, error: participantsError } = await supabase
-          .from("participants")
-          .select("*")
-          .eq("game_id", gameId)
-          .order("score", { ascending: false });
+        // Only fetch participants list if not cached or if we need fresh leaderboard data
+        if (!cachedParticipantsData || cachedParticipantsData.length === 0) {
+          console.log("Fetching participants list (not cached)");
+          const { data: freshParticipantsData, error: participantsError } = await supabase
+            .from("participants")
+            .select("*")
+            .eq("game_id", gameId)
+            .order("score", { ascending: false });
 
-        setParticipants(participantsData || []);
-        setCachedParticipants(participantsData || []);
+          participantsData = freshParticipantsData || [];
+          setParticipants(participantsData);
+          setCachedParticipants(participantsData);
+        } else {
+          console.log("Using cached participants data");
+          setParticipants(cachedParticipantsData);
+        }
+        console.log("fetchData completed successfully");
       } catch (error: any) {
+        console.error("Error in fetchData:", error);
         toast.error(error.message);
       } finally {
+        setFetchDataLoading(false);
         setLoading(false);
       }
     };
@@ -132,7 +180,10 @@ const PlayQuiz = () => {
         (payload) => {
           console.log("Game update received:", payload);
           // Debounce updates to prevent excessive re-renders
-          setTimeout(() => fetchData(), 100);
+          setTimeout(() => {
+            console.log("Executing debounced fetchData for game update");
+            fetchData();
+          }, 100);
         }
       )
       .on(
@@ -145,8 +196,16 @@ const PlayQuiz = () => {
         },
         (payload) => {
           console.log("Participant update received:", payload);
-          // Debounce updates to prevent excessive re-renders
-          setTimeout(() => fetchData(), 100);
+          // Only update if this participant is affected or it's a score change
+          if (payload.new?.user_id === participant?.user_id || payload.new?.score !== payload.old?.score) {
+            // Debounce updates to prevent excessive re-renders
+            setTimeout(() => {
+              console.log("Executing debounced fetchData for participant update");
+              fetchData();
+            }, 100);
+          } else {
+            console.log("Skipping fetchData for irrelevant participant update");
+          }
         }
       )
       .subscribe((status) => {
