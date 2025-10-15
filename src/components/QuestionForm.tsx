@@ -103,10 +103,14 @@ export const QuestionForm = ({
   };
 
   const toggleCorrectAnswer = (index: number) => {
-    if (correctAnswers.includes(index)) {
-      setCorrectAnswers(correctAnswers.filter((i) => i !== index));
+    if (type === "mcq") {
+      setCorrectAnswers([index]);
     } else {
-      setCorrectAnswers([...correctAnswers, index]);
+      if (correctAnswers.includes(index)) {
+        setCorrectAnswers(correctAnswers.filter((i) => i !== index));
+      } else {
+        setCorrectAnswers([...correctAnswers, index]);
+      }
     }
   };
 
@@ -128,7 +132,8 @@ export const QuestionForm = ({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="mcq">Multiple Choice</SelectItem>
+                <SelectItem value="mcq">Multiple Choice (Single Answer)</SelectItem>
+                <SelectItem value="checkbox">Multiple Choice (Multiple Answers)</SelectItem>
                 <SelectItem value="short">Short Answer</SelectItem>
               </SelectContent>
             </Select>

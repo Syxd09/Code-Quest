@@ -40,24 +40,24 @@ export const ParticipantList = ({ participants, gameId }: ParticipantListProps) 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-lg md:text-xl">Participants ({participants.length})</CardTitle>
+        <CardTitle>Participants ({participants.length})</CardTitle>
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
           {participants.map((participant) => (
             <div
               key={participant.id}
-              className="flex flex-col md:flex-row md:items-center md:justify-between p-3 rounded-lg border bg-card gap-2"
+              className="flex items-center justify-between p-3 rounded-lg border bg-card"
             >
-              <div className="flex items-center gap-3 flex-1 min-w-0">
-                <div className="flex-1 min-w-0">
-                  <div className="font-medium text-sm md:text-base truncate">{participant.name}</div>
-                  <div className="text-xs md:text-sm text-muted-foreground">
+              <div className="flex items-center gap-3">
+                <div>
+                  <div className="font-medium">{participant.name}</div>
+                  <div className="text-sm text-muted-foreground">
                     Score: {participant.score} • Cheats: {participant.cheat_count}
                   </div>
                 </div>
               </div>
-              <div className="flex items-center justify-between md:justify-end gap-2">
+              <div className="flex items-center gap-2">
                 <Badge
                   variant={
                     participant.status === "active"
@@ -66,7 +66,6 @@ export const ParticipantList = ({ participants, gameId }: ParticipantListProps) 
                       ? "destructive"
                       : "secondary"
                   }
-                  className="text-xs"
                 >
                   {participant.status}
                 </Badge>
@@ -75,7 +74,6 @@ export const ParticipantList = ({ participants, gameId }: ParticipantListProps) 
                     variant="ghost"
                     size="icon"
                     onClick={() => eliminateParticipant(participant.id)}
-                    className="touch-manipulation min-h-[44px] min-w-[44px]"
                   >
                     <UserX className="w-4 h-4 text-destructive" />
                   </Button>

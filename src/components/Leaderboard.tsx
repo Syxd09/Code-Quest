@@ -40,7 +40,7 @@ export const Leaderboard = ({ participants, highlightId }: LeaderboardProps) => 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-lg md:text-xl">
+        <CardTitle className="flex items-center gap-2">
           <Trophy className="w-5 h-5 text-primary" />
           Leaderboard
         </CardTitle>
@@ -49,7 +49,7 @@ export const Leaderboard = ({ participants, highlightId }: LeaderboardProps) => 
         <div className="space-y-2">
           {sortedParticipants.map((participant, index) => {
             const isEliminated = participant.status === "eliminated";
-
+            
             return (
               <motion.div
                 key={participant.id}
@@ -64,24 +64,24 @@ export const Leaderboard = ({ participants, highlightId }: LeaderboardProps) => 
                     : "bg-card"
                 }`}
               >
-                <div className="flex items-center gap-3 flex-1 min-w-0">
-                  <div className="w-8 text-center font-bold flex-shrink-0">
+                <div className="flex items-center gap-3 flex-1">
+                  <div className="w-8 text-center font-bold">
                     {isEliminated ? (
                       <Ban className="w-5 h-5 text-destructive mx-auto" />
                     ) : (
-                      getRankIcon(index) || <span className="text-sm md:text-base">#{index + 1}</span>
+                      getRankIcon(index) || `#${index + 1}`
                     )}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className={`font-medium flex items-center gap-2 text-sm md:text-base ${isEliminated ? "line-through text-muted-foreground" : ""}`}>
-                      <span className="truncate">{participant.name}</span>
+                  <div className="flex-1">
+                    <div className={`font-medium flex items-center gap-2 ${isEliminated ? "line-through text-muted-foreground" : ""}`}>
+                      {participant.name}
                       {isEliminated && (
-                        <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded flex-shrink-0">
+                        <span className="text-xs bg-destructive text-destructive-foreground px-2 py-0.5 rounded">
                           ELIMINATED
                         </span>
                       )}
                     </div>
-                    <div className="text-xs md:text-sm text-muted-foreground">
+                    <div className="text-sm text-muted-foreground">
                       <AnimatedScore score={participant.score} /> points
                       {participant.cheat_count > 0 && !isEliminated && (
                         <span className="ml-2 text-xs text-destructive">

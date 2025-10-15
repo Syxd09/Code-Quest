@@ -11,7 +11,6 @@ import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogHea
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Clock, Lightbulb, AlertTriangle } from "lucide-react";
-import { useIsMobile } from "@/hooks/use-mobile";
 
 interface QuizQuestionProps {
   question: any;
@@ -21,7 +20,6 @@ interface QuizQuestionProps {
 }
 
 export const QuizQuestion = ({ question, gameId, participantId, revealSettings }: QuizQuestionProps) => {
-  const isMobile = useIsMobile();
   const [timeLeft, setTimeLeft] = useState(question.time_limit);
   const [answer, setAnswer] = useState<any>(null);
   const [selectedOptions, setSelectedOptions] = useState<string[]>([]);
@@ -38,91 +36,56 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const tabSwitchCount = useRef(0);
   const devToolsCheckInterval = useRef<NodeJS.Timeout>();
 
-  // Load initial cheat count with grace period for mobile joins
+  // Load initial cheat count
   useEffect(() => {
     const loadCheatCount = async () => {
-      try {
-        console.log(`[DEBUG] Loading cheat count for participant ${participantId}`);
-        const { data, error } = await supabase
-          .from("participants")
-          .select("cheat_count, status")
-          .eq("id", participantId)
-          .single();
-
-        if (error) {
-          console.error(`[DEBUG] Error loading cheat count:`, error);
-          return;
+      const { data } = await supabase
+        .from("participants")
+        .select("cheat_count, status")
+        .eq("id", participantId)
+        .single();
+      
+      if (data) {
+        setCheatCount(data.cheat_count || 0);
+        if (data.status === "eliminated") {
+          setEliminated(true);
         }
-
-        if (data) {
-          console.log(`[DEBUG] Loaded cheat count: ${data.cheat_count}, status: ${data.status}`);
-          // Grace period of 3 seconds for initial joins, especially on mobile
-          const gracePeriod = 3000;
-          console.log(`[DEBUG] Activating anti-cheat after ${gracePeriod}ms grace period for mobile-friendly experience`);
-
-          setTimeout(() => {
-            console.log(`[DEBUG] Grace period ended, setting cheat count to ${data.cheat_count || 0}`);
-            setCheatCount(data.cheat_count || 0);
-            if (data.status === "eliminated") {
-              console.log(`[DEBUG] Participant is eliminated`);
-              setEliminated(true);
-            }
-          }, gracePeriod);
-        } else {
-          console.warn(`[DEBUG] No participant data found for ID ${participantId}`);
-        }
-      } catch (error) {
-        console.error(`[DEBUG] Exception in loadCheatCount:`, error);
       }
     };
     loadCheatCount();
   }, [participantId]);
 
   const handleCheatDetected = async (reason: string) => {
-    if (submitted || eliminated) {
-      console.log(`[DEBUG] Ignoring cheat detection - submitted: ${submitted}, eliminated: ${eliminated}`);
-      return;
-    }
-
-    console.log(`[DEBUG] Cheat detected: ${reason}, isMobile: ${isMobile}, cheatCount: ${cheatCount}`);
+    if (submitted || eliminated) return;
 
     try {
-      console.log(`[DEBUG] Calling handle_cheat_detection RPC for participant ${participantId}`);
       const { data, error } = await supabase.rpc('handle_cheat_detection', {
         p_participant_id: participantId,
         p_game_id: gameId,
         p_reason: reason
       });
 
-      if (error) {
-        console.error(`[DEBUG] RPC error:`, error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log(`[DEBUG] RPC response:`, data);
       const result = data as { success?: boolean; cheat_count: number; score: number; status: string; error?: string };
-
+      
       if (result.error) {
-        console.error(`[DEBUG] RPC returned error: ${result.error}`);
         toast.error(result.error);
         return;
       }
 
-      console.log(`[DEBUG] Updating cheat count to ${result.cheat_count}, status: ${result.status}`);
       setCheatCount(result.cheat_count);
 
       if (result.status === 'eliminated') {
-        console.log(`[DEBUG] Participant eliminated`);
         setEliminated(true);
         setWarningMessage("You have been ELIMINATED from the game due to multiple cheat attempts!");
         setShowWarning(true);
       } else {
-        console.log(`[DEBUG] Showing cheat warning`);
         setWarningMessage(`⚠️ CHEAT DETECTED: ${reason}\n\n-50 points penalty!\n\nWarning ${result.cheat_count}/3: One more strike and you'll be eliminated!`);
         setShowWarning(true);
       }
     } catch (error: any) {
-      console.error(`[DEBUG] Cheat detection error:`, error);
+      console.error('Cheat detection error:', error);
     }
   };
 
@@ -130,36 +93,28 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden && !submitted && !eliminated) {
-        console.log("[DEBUG] Tab visibility change detected, isMobile:", isMobile);
-        if (!isMobile) {
-          handleCheatDetected("Tab switching detected");
-        } else {
-          console.log("[DEBUG] Ignoring tab switch on mobile device");
-        }
+        handleCheatDetected("Tab switching detected");
       }
     };
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, eliminated, cheatCount]);
 
   // Anti-cheat: Browser back button detection
   useEffect(() => {
     const handlePopState = (e: PopStateEvent) => {
       e.preventDefault();
-      console.log("[DEBUG] Browser back button detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (!submitted && !eliminated) {
         handleCheatDetected("Browser back button usage detected");
         window.history.pushState(null, "", window.location.href);
-      } else if (isMobile) {
-        console.log("[DEBUG] Ignoring browser back button on mobile device");
       }
     };
-
+    
     window.history.pushState(null, "", window.location.href);
     window.addEventListener("popstate", handlePopState);
-
+    
     return () => window.removeEventListener("popstate", handlePopState);
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, eliminated, cheatCount]);
 
   // Anti-cheat: DevTools detection
   useEffect(() => {
@@ -167,60 +122,50 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       const threshold = 160;
       const widthThreshold = window.outerWidth - window.innerWidth > threshold;
       const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-
+      
       if (widthThreshold || heightThreshold) {
-        console.log("[DEBUG] DevTools detection triggered, isMobile:", isMobile);
-        if (!submitted && !eliminated && !isMobile) {
+        if (!submitted && !eliminated) {
           handleCheatDetected("Developer tools opened");
-        } else if (isMobile) {
-          console.log("[DEBUG] Ignoring DevTools detection on mobile device");
         }
       }
     };
 
     devToolsCheckInterval.current = setInterval(detectDevTools, 1000);
-
+    
     return () => {
       if (devToolsCheckInterval.current) {
         clearInterval(devToolsCheckInterval.current);
       }
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, eliminated, cheatCount]);
 
   // Anti-cheat: Copy-paste detection
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
-      console.log("[DEBUG] Paste event detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (!submitted && !eliminated) {
         e.preventDefault();
         handleCheatDetected("Copy-paste attempt detected");
-      } else if (isMobile) {
-        console.log("[DEBUG] Allowing paste on mobile device");
       }
     };
 
     const handleCopy = (e: ClipboardEvent) => {
-      console.log("[DEBUG] Copy event detected, isMobile:", isMobile);
-      if (!submitted && !eliminated && !isMobile) {
+      if (!submitted && !eliminated) {
         e.preventDefault();
         handleCheatDetected("Copy attempt detected");
-      } else if (isMobile) {
-        console.log("[DEBUG] Allowing copy on mobile device");
       }
     };
 
     document.addEventListener("paste", handlePaste);
     document.addEventListener("copy", handleCopy);
-
+    
     return () => {
       document.removeEventListener("paste", handlePaste);
       document.removeEventListener("copy", handleCopy);
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, eliminated, cheatCount]);
 
   // Reset state when question changes
   useEffect(() => {
-    console.log("[DEBUG] Question changed, resetting state. New question ID:", question.id);
     setTimeLeft(question.time_limit);
     setAnswer(null);
     setSelectedOptions([]);
@@ -252,54 +197,37 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   }, [question.id, submitted]);
 
   const handleSubmit = async (autoSubmit = false) => {
-    if (submitted || submitting) {
-      console.log(`[DEBUG] Ignoring submit - submitted: ${submitted}, submitting: ${submitting}`);
-      return;
-    }
+    if (submitted || submitting) return;
 
-    console.log(`[DEBUG] Starting submission for question ${question.id}, autoSubmit: ${autoSubmit}`);
     setSubmitting(true);
 
     try {
       const timeTaken = question.time_limit - timeLeft;
-      console.log(`[DEBUG] Time taken: ${timeTaken}s out of ${question.time_limit}s`);
-
       let finalAnswer: any;
       let correct = false;
 
       if (question.type === "mcq") {
-        if (question.correct_answers?.length === 1) {
-          finalAnswer = answer;
-          correct = question.correct_answers?.includes(answer);
-          console.log(`[DEBUG] Single choice MCQ - answer: ${answer}, correct: ${correct}`);
-        } else {
-          finalAnswer = selectedOptions;
-          correct =
-            selectedOptions.length === question.correct_answers?.length &&
-            selectedOptions.every((opt) => question.correct_answers.includes(opt));
-          console.log(`[DEBUG] Multiple choice MCQ - selected: ${selectedOptions.length}, required: ${question.correct_answers?.length}, correct: ${correct}`);
-        }
+        finalAnswer = answer;
+        correct = question.correct_answers?.includes(answer);
+      } else if (question.type === "checkbox") {
+        finalAnswer = selectedOptions;
+        correct =
+          selectedOptions.length === question.correct_answers?.length &&
+          selectedOptions.every((opt) => question.correct_answers.includes(opt));
       } else if (question.type === "short") {
         finalAnswer = answer;
         const keywords = question.keywords?.map((k: any) => k.text.toLowerCase()) || [];
         const answerLower = (answer || "").toLowerCase();
         correct = keywords.some((keyword: string) => answerLower.includes(keyword));
-        console.log(`[DEBUG] Short answer - answer: "${answer}", keywords: ${keywords.join(', ')}, correct: ${correct}`);
       }
 
       const timeFactor = Math.max(0.1, timeLeft / question.time_limit);
       let pointsAwarded = correct ? Math.round(question.points * timeFactor) : 0;
-
+      
       // Deduct hint penalty if hint was used
       if (hintUsed && correct) {
         pointsAwarded = Math.max(0, pointsAwarded - (question.hint_penalty || 10));
-        console.log(`[DEBUG] Hint penalty applied: -${question.hint_penalty || 10} points`);
       }
-
-      console.log(`[DEBUG] Calculated points: ${pointsAwarded} (timeFactor: ${timeFactor.toFixed(2)}, hintUsed: ${hintUsed})`);
-
-      const idempotencyKey = `${participantId}-${question.id}-${Date.now()}`;
-      console.log(`[DEBUG] Submitting response with idempotency key: ${idempotencyKey}`);
 
       const { data, error } = await supabase.rpc('submit_response', {
         p_game_id: gameId,
@@ -309,30 +237,23 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         p_correct: correct,
         p_time_taken: timeTaken,
         p_points_awarded: pointsAwarded,
-        p_idempotency_key: idempotencyKey,
+        p_idempotency_key: `${participantId}-${question.id}-${Date.now()}`,
       });
 
-      if (error) {
-        console.error(`[DEBUG] Submit RPC error:`, error);
-        throw error;
-      }
+      if (error) throw error;
 
-      console.log(`[DEBUG] Submit RPC response:`, data);
       const result = data as { success?: boolean; points_awarded?: number; error?: string };
-
+      
       if (result.error) {
         if (result.error === 'Response already submitted') {
-          console.log(`[DEBUG] Duplicate submission detected, ignoring`);
           // Silently ignore duplicate submissions
           setSubmitted(true);
           setWasCorrect(correct);
           return;
         }
-        console.error(`[DEBUG] Submit error: ${result.error}`);
         throw new Error(result.error);
       }
 
-      console.log(`[DEBUG] Submission successful, points awarded: ${result.points_awarded}`);
       setSubmitted(true);
       setWasCorrect(correct);
 
@@ -344,7 +265,6 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         );
       }
     } catch (error: any) {
-      console.error(`[DEBUG] Submit error:`, error);
       toast.error(error.message);
     } finally {
       setSubmitting(false);
@@ -353,18 +273,13 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
   useEffect(() => {
     if (revealSettings?.reveal_question_id === question.id && submitted) {
-      console.log("[DEBUG] Showing answer reveal for question", question.id);
       setShowReveal(true);
-      const timer = setTimeout(() => {
-        console.log("[DEBUG] Hiding answer reveal for question", question.id);
-        setShowReveal(false);
-      }, 8000);
+      const timer = setTimeout(() => setShowReveal(false), 8000);
       return () => clearTimeout(timer);
     }
   }, [revealSettings, question.id, submitted]);
 
   const handleHintClick = () => {
-    console.log("[DEBUG] Hint clicked for question", question.id);
     setShowHint(true);
     setHintUsed(true);
     toast.info(`Hint revealed! -${question.hint_penalty || 10} points penalty`);
@@ -414,17 +329,17 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       >
       <Card className="shadow-card">
         <CardHeader>
-          <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary" />
-              <span className="text-xl md:text-2xl font-bold">{timeLeft}s</span>
+              <span className="text-2xl font-bold">{timeLeft}s</span>
             </div>
             <div className="text-sm text-muted-foreground">
               {question.points} points
             </div>
           </div>
           <Progress value={progress} className="mb-4" />
-          <CardTitle className="text-lg md:text-xl leading-relaxed">{question.text}</CardTitle>
+          <CardTitle className="text-xl">{question.text}</CardTitle>
           {question.hint && !showHint && !submitted && (
             <Button
               onClick={handleHintClick}
@@ -452,46 +367,43 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         </CardHeader>
         <CardContent className="space-y-4">
           {question.type === "mcq" && (
-            <>
-              {question.correct_answers?.length === 1 ? (
-                <RadioGroup value={answer} onValueChange={setAnswer} disabled={submitted}>
-                  {question.options?.map((option: string, index: number) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                      <RadioGroupItem value={option} id={`option-${index}`} disabled={submitted} className="mt-1" />
-                      <Label
-                        htmlFor={`option-${index}`}
-                        className={`flex-1 text-sm md:text-base leading-relaxed ${submitted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
-                      >
-                        {option}
-                      </Label>
-                    </div>
-                  ))}
-                </RadioGroup>
-              ) : (
-                <div className="space-y-3">
-                  {question.options?.map((option: string, index: number) => (
-                    <div key={index} className="flex items-start space-x-3 p-3 rounded-lg border hover:bg-muted/50 transition-colors">
-                      <Checkbox
-                        id={`option-${index}`}
-                        checked={selectedOptions.includes(option)}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            setSelectedOptions([...selectedOptions, option]);
-                          } else {
-                            setSelectedOptions(selectedOptions.filter((o) => o !== option));
-                          }
-                        }}
-                        disabled={submitted}
-                        className="mt-1"
-                      />
-                      <Label htmlFor={`option-${index}`} className="flex-1 text-sm md:text-base leading-relaxed cursor-pointer">
-                        {option}
-                      </Label>
-                    </div>
-                  ))}
+            <RadioGroup value={answer} onValueChange={setAnswer} disabled={submitted}>
+              {question.options?.map((option: string, index: number) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <RadioGroupItem value={option} id={`option-${index}`} disabled={submitted} />
+                  <Label 
+                    htmlFor={`option-${index}`} 
+                    className={`flex-1 ${submitted ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                  >
+                    {option}
+                  </Label>
                 </div>
-              )}
-            </>
+              ))}
+            </RadioGroup>
+          )}
+
+          {question.type === "checkbox" && (
+            <div className="space-y-2">
+              {question.options?.map((option: string, index: number) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <Checkbox
+                    id={`option-${index}`}
+                    checked={selectedOptions.includes(option)}
+                    onCheckedChange={(checked) => {
+                      if (checked) {
+                        setSelectedOptions([...selectedOptions, option]);
+                      } else {
+                        setSelectedOptions(selectedOptions.filter((o) => o !== option));
+                      }
+                    }}
+                    disabled={submitted}
+                  />
+                  <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
+                    {option}
+                  </Label>
+                </div>
+              ))}
+            </div>
           )}
 
           {question.type === "short" && (
@@ -500,15 +412,13 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
               onChange={(e) => setAnswer(e.target.value)}
               placeholder="Type your answer..."
               disabled={submitted}
-              className="text-base md:text-lg py-3"
             />
           )}
 
           <Button
             onClick={() => handleSubmit()}
-            disabled={submitted || submitting || (!answer && selectedOptions.length === 0) || (question.type === "mcq" && question.correct_answers?.length > 1 && selectedOptions.length === 0)}
-            className="w-full shadow-button text-base md:text-lg py-3 md:py-4 min-h-[48px] touch-manipulation"
-            size="lg"
+            disabled={submitted || submitting || (!answer && selectedOptions.length === 0)}
+            className="w-full shadow-button"
           >
             {submitted ? "Submitted" : submitting ? "Submitting..." : "Submit Answer"}
           </Button>
@@ -538,7 +448,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
                   }
                 }}
                 exit={{ opacity: 0, scale: 0.5, y: -50 }}
-                className={`p-4 md:p-6 rounded-xl text-center font-bold text-xl md:text-2xl shadow-lg ${
+                className={`p-6 rounded-xl text-center font-bold text-2xl shadow-lg ${
                   wasCorrect
                     ? "bg-gradient-to-r from-green-500/30 to-emerald-500/30 text-green-700 dark:text-green-300 border-2 border-green-500"
                     : "bg-gradient-to-r from-red-500/30 to-rose-500/30 text-red-700 dark:text-red-300 border-2 border-red-500"

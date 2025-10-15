@@ -85,26 +85,17 @@ const AdminDashboard = () => {
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "participants", filter: `game_id=eq.${gameId}` },
-        (payload) => {
-          console.log("[DEBUG] Admin: Participant update received:", payload);
-          fetchData();
-        }
+        () => fetchData()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "questions", filter: `game_id=eq.${gameId}` },
-        (payload) => {
-          console.log("[DEBUG] Admin: Question update received:", payload);
-          fetchData();
-        }
+        () => fetchData()
       )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "games", filter: `id=eq.${gameId}` },
-        (payload) => {
-          console.log("[DEBUG] Admin: Game update received:", payload);
-          fetchData();
-        }
+        () => fetchData()
       )
       .subscribe();
 
@@ -192,12 +183,12 @@ const AdminDashboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <div className="container mx-auto px-4 py-4 md:py-8">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 md:mb-8 gap-4">
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold">{game.title}</h1>
-            <div className="flex flex-wrap items-center gap-2 md:gap-4 mt-2">
-              <Badge variant="outline" className="text-sm md:text-lg px-3 md:px-4 py-1">
+            <h1 className="text-3xl font-bold">{game.title}</h1>
+            <div className="flex items-center gap-4 mt-2">
+              <Badge variant="outline" className="text-lg px-4 py-1">
                 {game.join_code}
               </Badge>
               <Badge
@@ -208,28 +199,26 @@ const AdminDashboard = () => {
                     ? "secondary"
                     : "outline"
                 }
-                className="text-xs md:text-sm"
               >
                 {game.status}
               </Badge>
             </div>
           </div>
-          <Button onClick={() => setShowQR(true)} variant="outline" className="w-full md:w-auto touch-manipulation min-h-[44px]">
+          <Button onClick={() => setShowQR(true)} variant="outline">
             <QrCode className="w-4 h-4 mr-2" />
             Show QR Code
           </Button>
         </div>
 
-        <div className="grid gap-4 md:gap-6 mb-4 md:mb-6">
+        <div className="grid gap-6 mb-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg md:text-xl">Game Controls</CardTitle>
+              <CardTitle>Game Controls</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               <Button
                 onClick={() => updateGameStatus("started")}
                 disabled={game.status === "started"}
-                className="flex-1 md:flex-none min-h-[44px] touch-manipulation"
               >
                 <Play className="w-4 h-4 mr-2" />
                 Start
@@ -238,23 +227,21 @@ const AdminDashboard = () => {
                 onClick={() => updateGameStatus("paused")}
                 disabled={game.status !== "started"}
                 variant="secondary"
-                className="flex-1 md:flex-none min-h-[44px] touch-manipulation"
               >
                 <Pause className="w-4 h-4 mr-2" />
                 Pause
               </Button>
-              <Button onClick={revealAnswer} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation">
+              <Button onClick={revealAnswer} variant="outline">
                 <Eye className="w-4 h-4 mr-2" />
                 Reveal Answer
               </Button>
-              <Button onClick={nextQuestion} variant="outline" className="flex-1 md:flex-none min-h-[44px] touch-manipulation">
+              <Button onClick={nextQuestion} variant="outline">
                 <SkipForward className="w-4 h-4 mr-2" />
                 Next Question
               </Button>
               <Button
                 onClick={() => updateGameStatus("ended")}
                 variant="destructive"
-                className="flex-1 md:flex-none min-h-[44px] touch-manipulation"
               >
                 <StopCircle className="w-4 h-4 mr-2" />
                 End Game
@@ -264,15 +251,15 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="questions" className="w-full">
-          <TabsList className="grid w-full grid-cols-3 text-xs md:text-sm">
-            <TabsTrigger value="questions" className="text-xs md:text-sm">Questions</TabsTrigger>
-            <TabsTrigger value="participants" className="text-xs md:text-sm">Participants ({participants.length})</TabsTrigger>
-            <TabsTrigger value="leaderboard" className="text-xs md:text-sm">Leaderboard</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="questions">Questions</TabsTrigger>
+            <TabsTrigger value="participants">Participants ({participants.length})</TabsTrigger>
+            <TabsTrigger value="leaderboard">Leaderboard</TabsTrigger>
           </TabsList>
 
           <TabsContent value="questions" className="space-y-4">
             <div className="flex justify-end">
-              <Button onClick={() => setShowQuestionForm(true)} className="min-h-[44px] touch-manipulation">
+              <Button onClick={() => setShowQuestionForm(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Add Question
               </Button>
