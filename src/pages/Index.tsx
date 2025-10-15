@@ -61,66 +61,66 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero">
-  <div className="container mx-auto px-4 py-16">
-    {/* Hero Section */}
-    <motion.div
-  initial={{ opacity: 0, y: 20 }}
-  animate={{ opacity: 1, y: 0 }}
-  transition={{ duration: 0.6 }}
-  className="flex items-center justify-center mb-16 space-x-6"
->
-  <div className="flex flex-row items-center space-x-6 bg-slate-800 p-6 rounded-lg">
-  {/* Logo image */}
-  <img
-    src="public/DSBA-LOGO.png"
-    alt="Dayananda Sagar Business Academy Logo"
-    className="w-32 h-32 object-contain"
-  />
+   <div className="container mx-auto px-4 py-8 md:py-16">
+     {/* Hero Section */}
+     <motion.div
+   initial={{ opacity: 0, y: 20 }}
+   animate={{ opacity: 1, y: 0 }}
+   transition={{ duration: 0.6 }}
+   className="flex items-center justify-center mb-8 md:mb-16"
+ >
+   <div className="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6 bg-slate-800/80 backdrop-blur-sm p-4 md:p-6 rounded-lg w-full max-w-4xl border border-white/10">
+   {/* Logo image */}
+   <img
+     src="/DSBA-LOGO.png"
+     alt="Dayananda Sagar Business Academy Logo"
+     className="w-24 h-24 md:w-32 md:h-32 object-contain"
+   />
 
-  {/* Academy name text */}
-  <div>
-    <span className="text-3xl md:text-5xl font-bold text-white">
-      Dayananda Sagar Business Academy
-    </span>
-  </div>
-  </div>
-</motion.div>
+   {/* Academy name text */}
+   <div className="text-center md:text-left">
+     <span className="text-2xl md:text-3xl lg:text-5xl font-bold text-white leading-tight">
+       Dayananda Sagar Business Academy
+     </span>
+   </div>
+   </div>
+ </motion.div>
 
 
-    {/* Action Cards */}
-    {/* Action Cards */}
-<div className="flex items-center justify-center mb-16">
-  <motion.div
-    initial={{ opacity: 0, x: -20 }}
-    animate={{ opacity: 1, x: 0 }}
-    transition={{ duration: 0.6, delay: 0.2 }}
-    className="w-full max-w-md"
-  >
-    <Card className="shadow-card hover:shadow-button transition-shadow">
-      <CardHeader>
-        <CardTitle>Create Quiz</CardTitle>
-        <CardDescription>Start a new live quiz session</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Input
-          placeholder="Enter quiz title..."
-          value={gameTitle}
-          onChange={(e) => setGameTitle(e.target.value)}
-          onKeyPress={(e) => e.key === "Enter" && createGame()}
-        />
-        <Button
-          onClick={createGame}
-          disabled={isCreating}
-          className="w-full shadow-button"
-        >
-          {isCreating ? "Creating..." : "Create Quiz"}
-        </Button>
-      </CardContent>
-    </Card>
-  </motion.div>
-</div>
-  </div>
-</div>
+     {/* Action Cards */}
+ <div className="flex items-center justify-center mb-8 md:mb-16">
+   <motion.div
+     initial={{ opacity: 0, x: -20 }}
+     animate={{ opacity: 1, x: 0 }}
+     transition={{ duration: 0.6, delay: 0.2 }}
+     className="w-full max-w-md px-4"
+   >
+     <Card className="shadow-card hover:shadow-button transition-shadow">
+       <CardHeader>
+         <CardTitle className="text-lg md:text-xl">Create Quiz</CardTitle>
+         <CardDescription className="text-sm md:text-base">Start a new live quiz session</CardDescription>
+       </CardHeader>
+       <CardContent className="space-y-4">
+         <Input
+           placeholder="Enter quiz title..."
+           value={gameTitle}
+           onChange={(e) => setGameTitle(e.target.value)}
+           onKeyPress={(e) => e.key === "Enter" && createGame()}
+           className="text-base md:text-lg py-3"
+         />
+         <Button
+           onClick={createGame}
+           disabled={isCreating}
+           className="w-full shadow-button text-base md:text-lg py-3 min-h-[48px] touch-manipulation"
+         >
+           {isCreating ? "Creating..." : "Create Quiz"}
+         </Button>
+       </CardContent>
+     </Card>
+   </motion.div>
+ </div>
+   </div>
+ </div>
   );
 };
 

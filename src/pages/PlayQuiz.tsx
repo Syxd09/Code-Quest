@@ -27,6 +27,9 @@ const PlayQuiz = () => {
   const [participants, setParticipants] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [previousScore, setPreviousScore] = useState(0);
+  const [cachedParticipants, setCachedParticipants] = useState<any[]>([]);
+  const [cachedGame, setCachedGame] = useState<any>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connecting' | 'connected' | 'disconnected'>('connecting');
 
   useEffect(() => {
     if (!gameId) return;
@@ -65,6 +68,7 @@ const PlayQuiz = () => {
         }
 
         setGame(gameData);
+        setCachedGame(gameData);
 
         const { data: participantData, error: participantError } = await supabase
           .from("participants")
@@ -105,6 +109,7 @@ const PlayQuiz = () => {
           .order("score", { ascending: false });
 
         setParticipants(participantsData || []);
+        setCachedParticipants(participantsData || []);
       } catch (error: any) {
         toast.error(error.message);
       } finally {
@@ -119,24 +124,41 @@ const PlayQuiz = () => {
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "games",
           filter: `id=eq.${gameId}`,
         },
-        () => fetchData()
+        (payload) => {
+          console.log("[DEBUG] Game update received:", payload);
+          // Debounce updates to prevent excessive re-renders
+          setTimeout(() => {
+            console.log("[DEBUG] Fetching data after game update");
+            fetchData();
+          }, 100);
+        }
       )
       .on(
         "postgres_changes",
         {
-          event: "*",
+          event: "UPDATE",
           schema: "public",
           table: "participants",
           filter: `game_id=eq.${gameId}`,
         },
-        () => fetchData()
+        (payload) => {
+          console.log("[DEBUG] Participant update received:", payload);
+          // Debounce updates to prevent excessive re-renders
+          setTimeout(() => {
+            console.log("[DEBUG] Fetching data after participant update");
+            fetchData();
+          }, 100);
+        }
       )
-      .subscribe();
+      .subscribe((status) => {
+        console.log("[DEBUG] Subscription status:", status);
+        setConnectionStatus(status === 'SUBSCRIBED' ? 'connected' : status === 'CLOSED' ? 'disconnected' : 'connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -217,15 +239,15 @@ const PlayQuiz = () => {
 
   return (
     <div className="min-h-screen bg-gradient-hero">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-8">
+      <div className="container mx-auto px-4 py-4 md:py-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 md:mb-8 gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-white">{game.title}</h1>
-            <p className="text-white/80 mt-1">Hello, {participant.name}!</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-white">{game.title}</h1>
+            <p className="text-white/80 mt-1 text-sm md:text-base">Hello, {participant.name}!</p>
           </div>
 
-          <div className="flex items-center gap-4">
-            <Badge variant="outline" className="text-white border-white/30 relative">
+          <div className="flex flex-wrap items-center gap-2 md:gap-4">
+            <Badge variant="outline" className="text-white border-white/30 relative text-sm md:text-base">
               Score: <AnimatedScore score={participant.score} />
               <ScoreSparkline
                 score={participant.score}
@@ -241,17 +263,31 @@ const PlayQuiz = () => {
                   ? "secondary"
                   : "outline"
               }
+              className="text-xs md:text-sm"
             >
               {game.status}
+            </Badge>
+
+            <Badge
+              variant={
+                connectionStatus === "connected"
+                  ? "default"
+                  : connectionStatus === "connecting"
+                  ? "secondary"
+                  : "destructive"
+              }
+              className="text-xs md:text-sm"
+            >
+              {connectionStatus === "connected" ? "🟢 Online" : connectionStatus === "connecting" ? "🟡 Connecting..." : "🔴 Offline"}
             </Badge>
           </div>
         </div>
 
         {game.status === "waiting" && (
           <Card>
-            <CardContent className="pt-6 text-center">
-              <h2 className="text-2xl font-bold mb-2">Waiting to start...</h2>
-              <p className="text-muted-foreground">
+            <CardContent className="pt-6 text-center px-4">
+              <h2 className="text-xl md:text-2xl font-bold mb-2">Waiting to start...</h2>
+              <p className="text-muted-foreground text-sm md:text-base">
                 The quiz will begin shortly. Get ready!
               </p>
             </CardContent>
@@ -274,14 +310,14 @@ const PlayQuiz = () => {
             transition={{ duration: 0.5 }}
           >
             <Card className="shadow-2xl border-2">
-              <CardHeader className="text-center bg-gradient-to-r from-purple-500/10 to-blue-500/10">
+              <CardHeader className="text-center bg-gradient-to-r from-purple-500/10 to-blue-500/10 px-4">
                 <motion.div
                   initial={{ y: -30, opacity: 0 }}
                   animate={{ y: 0, opacity: 1 }}
                   transition={{ delay: 0.2 }}
                 >
-                  <CardTitle className="text-4xl mb-2">🏆 Game Over! 🏆</CardTitle>
-                  <CardDescription className="text-lg">
+                  <CardTitle className="text-2xl md:text-4xl mb-2">🏆 Game Over! 🏆</CardTitle>
+                  <CardDescription className="text-base md:text-lg">
                     Thanks for playing! Here are the final results:
                   </CardDescription>
                 </motion.div>
@@ -308,9 +344,9 @@ const PlayQuiz = () => {
           game.status !== "ended" &&
           game.status !== "waiting" && (
             <Card>
-              <CardContent className="pt-6 text-center">
-                <h2 className="text-2xl font-bold mb-2">Please wait...</h2>
-                <p className="text-muted-foreground">
+              <CardContent className="pt-6 text-center px-4">
+                <h2 className="text-xl md:text-2xl font-bold mb-2">Please wait...</h2>
+                <p className="text-muted-foreground text-sm md:text-base">
                   The admin will start the next question shortly.
                 </p>
               </CardContent>
