@@ -2,93 +2,94 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Professional design system with neutral + corporate blue theme */
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
 @layer base {
   :root {
-    /* Base background */
-    --background: 0 0% 100%;
-    --foreground: 220 25% 15%;
+    /* Quiz theme - vibrant and energetic */
+    --background: 240 20% 99%;
+    --foreground: 260 40% 12%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 25% 15%;
+    --card-foreground: 260 40% 12%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 25% 15%;
+    --popover-foreground: 260 40% 12%;
 
-    /* Primary: corporate blue */
-    --primary: 220 75% 45%;
+    /* Primary: Vibrant purple-blue */
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
-    --primary-glow: 220 75% 55%;
+    --primary-glow: 262 83% 68%;
 
-    /* Secondary: subtle neutral gray */
-    --secondary: 220 15% 65%;
-    --secondary-foreground: 220 25% 15%;
+    /* Secondary: Energetic orange */
+    --secondary: 25 95% 53%;
+    --secondary-foreground: 0 0% 100%;
 
-    /* Success: professional soft green */
-    --success: 145 45% 40%;
+    /* Success: Bright green for correct answers */
+    --success: 142 76% 36%;
     --success-foreground: 0 0% 100%;
-    --success-light: 145 45% 92%;
+    --success-light: 142 76% 90%;
 
     /* Muted colors */
-    --muted: 220 15% 95%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 240 10% 96%;
+    --muted-foreground: 240 4% 46%;
 
-    /* Accent: modern teal */
-    --accent: 190 65% 42%;
-    --accent-foreground: 0 0% 100%;
+    /* Accent: Bright yellow for highlights */
+    --accent: 45 93% 58%;
+    --accent-foreground: 260 40% 12%;
 
-    /* Destructive: standard red */
-    --destructive: 0 72% 50%;
+    --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
 
-    /* Borders and rings */
-    --border: 220 15% 85%;
-    --input: 220 15% 85%;
-    --ring: 220 75% 45%;
+    --border: 240 10% 90%;
+    --input: 240 10% 90%;
+    --ring: 262 83% 58%;
 
     --radius: 0.75rem;
 
-    /* Gradients (subtle, professional) */
-    --gradient-primary: linear-gradient(135deg, hsl(220 75% 45%), hsl(220 70% 55%));
-    --gradient-success: linear-gradient(135deg, hsl(145 45% 40%), hsl(150 40% 50%));
-    --gradient-hero: linear-gradient(135deg, hsl(220 75% 45%), hsl(220 70% 55%), hsl(200 60% 50%));
-
-    /* Shadows (softer, neutral) */
-    --shadow-card: 0 4px 20px -2px hsl(220 40% 20% / 0.08);
-    --shadow-button: 0 4px 14px 0 hsl(220 75% 45% / 0.25);
+    /* Gradients for modern quiz feel */
+    --gradient-primary: linear-gradient(135deg, hsl(262 83% 58%), hsl(280 80% 65%));
+    --gradient-success: linear-gradient(135deg, hsl(142 76% 36%), hsl(150 70% 45%));
+    --gradient-hero: linear-gradient(135deg, hsl(262 83% 58%), hsl(280 80% 65%), hsl(300 75% 70%));
+    
+    /* Shadows */
+    --shadow-card: 0 4px 20px -2px hsl(262 83% 58% / 0.15);
+    --shadow-button: 0 4px 14px 0 hsl(262 83% 58% / 0.35);
   }
 
   .dark {
-    --background: 220 25% 10%;
-    --foreground: 0 0% 100%;
+    --background: 260 40% 8%;
+    --foreground: 240 10% 96%;
 
-    --card: 220 25% 15%;
-    --card-foreground: 0 0% 100%;
+    --card: 260 30% 12%;
+    --card-foreground: 240 10% 96%;
 
-    --popover: 220 25% 15%;
-    --popover-foreground: 0 0% 100%;
+    --popover: 260 30% 12%;
+    --popover-foreground: 240 10% 96%;
 
-    --primary: 220 75% 55%;
+    --primary: 262 83% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 15% 65%;
+    --secondary: 25 95% 53%;
     --secondary-foreground: 0 0% 100%;
 
-    --success: 145 45% 50%;
+    --success: 142 76% 45%;
     --success-foreground: 0 0% 100%;
 
-    --muted: 220 20% 18%;
-    --muted-foreground: 220 10% 70%;
+    --muted: 260 20% 18%;
+    --muted-foreground: 240 6% 65%;
 
-    --accent: 190 65% 45%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 45 93% 58%;
+    --accent-foreground: 260 40% 12%;
 
-    --destructive: 0 62% 45%;
+    --destructive: 0 62% 50%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 20% 25%;
-    --input: 220 20% 25%;
-    --ring: 220 75% 55%;
+    --border: 260 20% 20%;
+    --input: 260 20% 20%;
+    --ring: 262 83% 58%;
   }
 }
 
