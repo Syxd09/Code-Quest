@@ -100,9 +100,9 @@ USING (
 
 -- 7. Create server-side function to handle cheat detection and scoring
 CREATE OR REPLACE FUNCTION public.handle_cheat_detection(
-  p_participant_id uuid,
-  p_game_id uuid,
-  p_reason text
+p_participant_id uuid,
+p_game_id uuid,
+p_reason text
 )
 RETURNS jsonb
 LANGUAGE plpgsql
@@ -110,48 +110,46 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  v_participant participants%ROWTYPE;
-  v_new_cheat_count integer;
-  v_new_score integer;
-  v_new_status user_status;
+v_participant participants%ROWTYPE;
+v_new_cheat_count integer;
+v_new_score integer;
+v_new_status user_status;
 BEGIN
-  -- Get current participant data
-  SELECT * INTO v_participant
-  FROM participants
-  WHERE id = p_participant_id AND game_id = p_game_id;
-  
-  IF NOT FOUND THEN
-    RETURN jsonb_build_object('error', 'Participant not found');
-  END IF;
-  
-  -- Calculate new values
-  v_new_cheat_count := COALESCE(v_participant.cheat_count, 0) + 1;
-  v_new_score := GREATEST(0, COALESCE(v_participant.score, 0) - 50);
-  v_new_status := v_participant.status;
-  
-  -- Check if should be eliminated
-  IF v_new_cheat_count >= 3 THEN
-    v_new_status := 'eliminated'::user_status;
-  END IF;
-  
-  -- Insert cheat log
-  INSERT INTO cheat_logs (game_id, participant_id, reason)
-  VALUES (p_game_id, p_participant_id, p_reason);
-  
-  -- Update participant
-  UPDATE participants
-  SET 
-    cheat_count = v_new_cheat_count,
-    score = v_new_score,
-    status = v_new_status
-  WHERE id = p_participant_id;
-  
-  RETURN jsonb_build_object(
-    'success', true,
-    'cheat_count', v_new_cheat_count,
-    'score', v_new_score,
-    'status', v_new_status
-  );
+-- Get current participant data
+SELECT * INTO v_participant
+FROM participants
+WHERE id = p_participant_id AND game_id = p_game_id;
+
+IF NOT FOUND THEN
+  RETURN jsonb_build_object('error', 'Participant not found');
+END IF;
+
+-- Calculate new values
+v_new_cheat_count := COALESCE(v_participant.cheat_count, 0) + 1;
+v_new_score := GREATEST(0, COALESCE(v_participant.score, 0) - 50);
+v_new_status := v_participant.status;
+
+-- Auto-elimination removed: participants are no longer eliminated on 3rd+ attempts
+-- Keep cheat_count incrementing and score penalties for monitoring purposes
+
+-- Insert cheat log
+INSERT INTO cheat_logs (game_id, participant_id, reason)
+VALUES (p_game_id, p_participant_id, p_reason);
+
+-- Update participant
+UPDATE participants
+SET
+  cheat_count = v_new_cheat_count,
+  score = v_new_score,
+  status = v_new_status
+WHERE id = p_participant_id;
+
+RETURN jsonb_build_object(
+  'success', true,
+  'cheat_count', v_new_cheat_count,
+  'score', v_new_score,
+  'status', v_new_status
+);
 END;
 $$;
 

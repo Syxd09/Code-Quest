@@ -33,7 +33,6 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   const [showHint, setShowHint] = useState(false);
   const [hintUsed, setHintUsed] = useState(false);
   const [cheatCount, setCheatCount] = useState(0);
-  const [eliminated, setEliminated] = useState(false);
   const [showWarning, setShowWarning] = useState(false);
   const [warningMessage, setWarningMessage] = useState("");
   const tabSwitchCount = useRef(0);
@@ -60,9 +59,6 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
         setTimeout(() => {
           setCheatCount(data.cheat_count || 0);
-          if (data.status === "eliminated") {
-            setEliminated(true);
-          }
         }, gracePeriod);
       }
     };
@@ -70,7 +66,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
   }, [participantId]);
 
   const handleCheatDetected = async (reason: string) => {
-    if (submitted || eliminated) return;
+    if (submitted) return;
 
     console.log(`Cheat detected: ${reason}, isMobile: ${isMobile}`);
 
@@ -111,48 +107,50 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
       setCheatCount(result.cheat_count);
 
-      if (result.status === 'eliminated') {
-        setEliminated(true);
-        const eliminationMessage = isMobile
-          ? "You have been ELIMINATED from the game due to multiple violations on mobile device!"
-          : "You have been ELIMINATED from the game due to multiple cheat attempts!";
-        setWarningMessage(eliminationMessage);
-        setShowWarning(true);
-      } else {
-        let penaltyMessage = "";
-        if (isMobile) {
-          if (isSeriousViolation) {
-            if (result.cheat_count === 1) {
-              penaltyMessage = `🚫 SERIOUS FIRST VIOLATION DETECTED: ${reason}\n\n-75 points penalty on mobile!\n\nThis is your FIRST serious violation. Enhanced monitoring is now active. A second violation will result in harsher penalties.`;
-            } else if (result.cheat_count === 2) {
-              penaltyMessage = `🚫🚨 SERIOUS SECOND VIOLATION DETECTED: ${reason}\n\n-100 points penalty on mobile!\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
-            }
+      // Keep cheat counting and penalties for monitoring purposes
+      let penaltyMessage = "";
+      if (isMobile) {
+        if (isSeriousViolation) {
+          if (result.cheat_count === 1) {
+            penaltyMessage = `🚫 SERIOUS FIRST VIOLATION DETECTED: ${reason}\n\n-75 points penalty on mobile!\n\nThis is your FIRST serious violation. Enhanced monitoring is now active. A second violation will result in harsher penalties.`;
+          } else if (result.cheat_count === 2) {
+            penaltyMessage = `🚫🚨 SERIOUS SECOND VIOLATION DETECTED: ${reason}\n\n-100 points penalty on mobile!\n\nThis is your SECOND violation. Additional violations will result in further penalties.`;
           } else {
-            if (result.cheat_count === 1) {
-              penaltyMessage = `⚠️ FIRST VIOLATION DETECTED: ${reason}\n\n-35 points penalty (reduced for mobile)\n\nThis is your FIRST violation. Mobile-friendly monitoring is active. A second violation will increase penalties significantly.`;
-            } else if (result.cheat_count === 2) {
-              penaltyMessage = `⚠️🚨 SECOND VIOLATION DETECTED: ${reason}\n\n-50 points penalty on mobile\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
-            }
+            penaltyMessage = `🚫🚨 ADDITIONAL SERIOUS VIOLATION DETECTED: ${reason}\n\n-75 points penalty on mobile!\n\nThis is violation #${result.cheat_count}. Continued violations will result in further penalties.`;
           }
+        } else {
+          if (result.cheat_count === 1) {
+            penaltyMessage = `⚠️ FIRST VIOLATION DETECTED: ${reason}\n\n-35 points penalty (reduced for mobile)\n\nThis is your FIRST violation. Mobile-friendly monitoring is active. A second violation will increase penalties significantly.`;
+          } else if (result.cheat_count === 2) {
+            penaltyMessage = `⚠️🚨 SECOND VIOLATION DETECTED: ${reason}\n\n-50 points penalty on mobile\n\nThis is your SECOND violation. Additional violations will result in further penalties.`;
+          } else {
+            penaltyMessage = `⚠️🚨 ADDITIONAL VIOLATION DETECTED: ${reason}\n\n-35 points penalty on mobile\n\nThis is violation #${result.cheat_count}. Continued violations will result in further penalties.`;
+          }
+        }
         } else {
           if (result.cheat_count === 1) {
             penaltyMessage = `⚠️ FIRST CHEAT WARNING: ${reason}\n\n-50 points penalty!\n\nThis is your FIRST violation. A second violation will result in harsher penalties and stricter monitoring.`;
           } else if (result.cheat_count === 2) {
-            penaltyMessage = `🚨 SECOND CHEAT WARNING: ${reason}\n\n-75 points penalty!\n\nThis is your SECOND violation. ONE MORE VIOLATION WILL RESULT IN IMMEDIATE ELIMINATION from the game.`;
+            penaltyMessage = `🚨 SECOND CHEAT WARNING: ${reason}\n\n-75 points penalty!\n\nThis is your SECOND violation. Additional violations will result in further penalties.`;
+          } else {
+            penaltyMessage = `🚨 ADDITIONAL CHEAT WARNING: ${reason}\n\n-50 points penalty!\n\nThis is violation #${result.cheat_count}. Continued violations will result in further penalties.`;
           }
         }
         setWarningMessage(penaltyMessage);
         setShowWarning(true);
       }
-    } catch (error: any) {
+   
+    catch (error: any) {
       console.error('Cheat detection error:', error);
+    } finally {
+      // no-op
     }
-  };
+  }
 
   // Anti-cheat: Enhanced tab switching and mobile app switching detection
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden && !submitted && !eliminated) {
+      if (document.hidden && !submitted) {
         console.log("Visibility change detected, isMobile:", isMobile, "document.hidden:", document.hidden, "visibilityState:", document.visibilityState);
 
         if (!isMobile) {
@@ -174,7 +172,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
             }
           }
         }
-      } else if (!document.hidden && !submitted && !eliminated && isMobile) {
+      } else if (!document.hidden && !submitted && isMobile) {
         // Mobile: check if returning from background
         const currentTime = Date.now();
         if (lastFocusTime.current) {
@@ -194,14 +192,14 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleBlur = () => {
-      if (!submitted && !eliminated) {
+      if (!submitted) {
         lastFocusTime.current = Date.now();
         console.log("Window blur detected, isMobile:", isMobile);
       }
     };
 
     const handleFocus = () => {
-      if (!submitted && !eliminated) {
+      if (!submitted) {
         const currentTime = Date.now();
         if (lastFocusTime.current) {
           const timeAway = currentTime - lastFocusTime.current;
@@ -229,7 +227,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     // Mobile-specific: detect pagehide/pagehide events for app switching
     const handlePageHide = (e: PageTransitionEvent) => {
-      if (!submitted && !eliminated && isMobile) {
+      if (!submitted && isMobile) {
         console.log("Mobile page hide detected - potential app switch");
         // On mobile, pagehide often means app switching
         if (e.persisted === false) {
@@ -241,7 +239,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handlePageShow = (e: PageTransitionEvent) => {
-      if (!submitted && !eliminated && isMobile) {
+      if (!submitted && isMobile) {
         console.log("Mobile page show detected - returning to app");
         if (e.persisted) {
           // Page was restored from cache, likely returning from app switch
@@ -273,7 +271,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       window.removeEventListener("pagehide", handlePageHide);
       window.removeEventListener("pageshow", handlePageShow);
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, isMobile]);
 
   // Anti-cheat: Browser back button and app closure detection
   useEffect(() => {
@@ -281,7 +279,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       e.preventDefault();
       console.log("Browser back button detected, isMobile:", isMobile);
       // Browser back button is generally not a cheating method on mobile, but still monitor
-      if (!submitted && !eliminated && !isMobile) {
+      if (!submitted && !isMobile) {
         handleCheatDetected("Browser back button usage detected");
         window.history.pushState(null, "", window.location.href);
       } else if (isMobile) {
@@ -290,7 +288,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-      if (!submitted && !eliminated) {
+      if (!submitted) {
         console.log("App closure attempt detected");
         // Note: Modern browsers limit what we can do here, but we can still detect the attempt
         handleCheatDetected("App closure attempt detected");
@@ -298,7 +296,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handlePageHide = (e: PageTransitionEvent) => {
-      if (!submitted && !eliminated && e.persisted === false) {
+      if (!submitted && e.persisted === false) {
         console.log("Page hide detected (potential app closure)");
         handleCheatDetected("App closure detected");
       }
@@ -314,7 +312,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handlePageHide);
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, isMobile]);
 
   // Anti-cheat: Enhanced DevTools detection with mobile compatibility
   useEffect(() => {
@@ -362,7 +360,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       if (hasDevTools) {
         console.log("DevTools detection triggered, isMobile:", isMobile);
         // DevTools detection is serious on any device
-        if (!submitted && !eliminated) {
+        if (!submitted) {
           handleCheatDetected("Developer tools opened");
         }
       }
@@ -378,7 +376,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
       if (end - start > threshold) {
         console.log("Debugger statement detected, potential DevTools usage on", isMobile ? "mobile" : "desktop");
-        if (!submitted && !eliminated) {
+        if (!submitted) {
           handleCheatDetected("Debugger usage detected");
         }
       }
@@ -392,7 +390,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       const entries = performance.getEntriesByType('measure');
       if (entries.length > 10) { // Too many performance measures might indicate debugging
         console.log("Suspicious performance monitoring detected on mobile");
-        if (!submitted && !eliminated) {
+        if (!submitted) {
           handleCheatDetected("Performance monitoring detected");
         }
       }
@@ -413,7 +411,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         clearInterval(devToolsCheckInterval.current);
       }
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, isMobile]);
 
   // Anti-cheat: Mobile-compatible copy-paste and interaction restrictions
   useEffect(() => {
@@ -424,7 +422,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     const handlePaste = (e: ClipboardEvent) => {
       console.log("Paste event detected, isMobile:", isMobile);
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       const currentTime = Date.now();
       pasteCount += 1;
@@ -453,7 +451,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     const handleCopy = (e: ClipboardEvent) => {
       console.log("Copy event detected, isMobile:", isMobile);
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       const currentTime = Date.now();
       copyCount += 1;
@@ -482,7 +480,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     const handleContextMenu = (e: MouseEvent) => {
       console.log("Context menu attempt detected, isMobile:", isMobile);
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       if (!isMobile) {
         e.preventDefault();
@@ -495,7 +493,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     const handleSelectStart = (e: Event) => {
       console.log("Text selection attempt detected, isMobile:", isMobile);
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       if (!isMobile) {
         e.preventDefault();
@@ -507,7 +505,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       // Prevent Ctrl+A, Ctrl+C, Ctrl+V, Ctrl+X on desktop
       if (!isMobile && (e.ctrlKey || e.metaKey)) {
@@ -550,7 +548,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
       document.removeEventListener("selectstart", handleSelectStart);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, isMobile]);
 
   // Anti-cheat: Enhanced suspicious behavior detection with touch support
   useEffect(() => {
@@ -559,7 +557,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     let lastTouchTime = 0;
 
     const handleClick = (e: MouseEvent) => {
-      if (submitted || eliminated || isMobile) return; // Skip mouse events on mobile
+      if (submitted || isMobile) return; // Skip mouse events on mobile
 
       const currentTime = Date.now();
       clickCount.current += 1;
@@ -585,7 +583,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleTouchStart = (e: TouchEvent) => {
-      if (submitted || eliminated || !isMobile) return;
+      if (submitted || !isMobile) return;
 
       const currentTime = Date.now();
       touchCount += 1;
@@ -622,7 +620,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleTouchEnd = (e: TouchEvent) => {
-      if (submitted || eliminated || !isMobile) return;
+      if (submitted || !isMobile) return;
 
       const touchDuration = Date.now() - touchStartTime;
 
@@ -638,7 +636,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
     };
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      if (submitted || eliminated) return;
+      if (submitted) return;
 
       // Detect unusual input patterns (holding down keys rapidly)
       if (e.repeat && Math.random() < 0.05) { // Random sampling to avoid false positives
@@ -663,7 +661,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
     // Mobile-specific: detect orientation changes that might indicate device manipulation
     const handleOrientationChange = () => {
-      if (!isMobile || submitted || eliminated) return;
+      if (!isMobile || submitted) return;
 
       console.log("Device orientation changed");
       // Orientation changes are normal on mobile, but rapid changes might be suspicious
@@ -691,7 +689,7 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
         window.removeEventListener("orientationchange", handleOrientationChange);
       }
     };
-  }, [submitted, eliminated, cheatCount, isMobile]);
+  }, [submitted, isMobile]);
 
   // Reset state when question changes
   useEffect(() => {
@@ -860,20 +858,6 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
 
   const progress = (timeLeft / question.time_limit) * 100;
 
-  if (eliminated) {
-    return (
-      <Card className="shadow-card border-destructive border-2">
-        <CardContent className="pt-6 text-center">
-          <AlertTriangle className="w-16 h-16 text-destructive mx-auto mb-4" />
-          <h2 className="text-3xl font-bold text-destructive mb-2">ELIMINATED</h2>
-          <p className="text-lg text-muted-foreground mb-4">Game Over</p>
-          <p className="text-muted-foreground">
-            You have been eliminated from the quiz due to multiple cheat attempts.
-          </p>
-        </CardContent>
-      </Card>
-    );
-  }
 
   return (
     <>
@@ -882,14 +866,14 @@ export const QuizQuestion = ({ question, gameId, participantId, revealSettings }
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="w-6 h-6" />
-              {eliminated ? "ELIMINATED!" : "CHEAT WARNING!"}
+              CHEAT WARNING!
             </AlertDialogTitle>
             <AlertDialogDescription className="text-base whitespace-pre-line">
               {warningMessage}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <Button onClick={() => setShowWarning(false)} className="mt-4">
-            {eliminated ? "Exit Game" : "I Understand"}
+            I Understand
           </Button>
         </AlertDialogContent>
       </AlertDialog>
